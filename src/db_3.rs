@@ -47,7 +47,7 @@ struct LogFile {
 }
 
 struct LogIndex {
-    map: Arc<Mutex<BTreeMap<Vec<u8>, Vec<(u64, IndexEntry)>>>>,
+    committed: Arc<Mutex<BTreeMap<Vec<u8>, Vec<(u64, IndexEntry)>>>>,
 }
 
 enum IndexEntry {
@@ -374,7 +374,7 @@ impl LogFile {
 impl LogIndex {
     fn new() -> LogIndex {
         LogIndex {
-            map: Arc::new(Mutex::new(BTreeMap::new())),
+            committed: Arc::new(Mutex::new(BTreeMap::new())),
         }
     }
 }
