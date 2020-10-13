@@ -146,9 +146,9 @@ impl ReadView {
 }
 
 impl<'batch> WriteTree<'batch> {
-    pub fn write(&mut self, key: &[u8], value: &[u8]) -> Result<()> { panic!() }
+    pub fn write(&mut self, key: &[u8], value: &[u8]) { panic!() }
 
-    pub fn delete(&mut self, key: &[u8]) -> Result<()> { panic!() }
+    pub fn delete(&mut self, key: &[u8]) { panic!() }
 }
 
 impl<'view> ReadTree<'view> {
