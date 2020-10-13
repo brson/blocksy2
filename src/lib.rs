@@ -31,10 +31,10 @@ impl ReadView {
 }
 
 impl<'batch> WriteTree<'batch> {
-    pub fn insert(&mut self, key: &[u8], value: &[u8]) -> Result<()> { self.0.insert(key, value) }
-    pub fn remove(&mut self, key: &[u8]) -> Result<()> { self.0.remove(key) }
+    pub fn write(&mut self, key: &[u8], value: &[u8]) -> Result<()> { self.0.write(key, value) }
+    pub fn delete(&mut self, key: &[u8]) -> Result<()> { self.0.delete(key) }
 }
 
 impl<'view> ReadTree<'view> {
-    pub async fn get(&self, key: &[u8]) -> Result<Option<Vec<u8>>> { self.0.get(key).await }
+    pub async fn read(&self, key: &[u8]) -> Result<Option<Vec<u8>>> { self.0.read(key).await }
 }

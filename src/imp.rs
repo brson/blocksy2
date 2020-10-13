@@ -146,11 +146,11 @@ impl ReadView {
 }
 
 impl<'batch> WriteTree<'batch> {
-    pub fn insert(&mut self, key: &[u8], value: &[u8]) -> Result<()> { panic!() }
+    pub fn write(&mut self, key: &[u8], value: &[u8]) -> Result<()> { panic!() }
 
-    pub fn remove(&mut self, key: &[u8]) -> Result<()> { panic!() }
+    pub fn delete(&mut self, key: &[u8]) -> Result<()> { panic!() }
 }
 
 impl<'view> ReadTree<'view> {
-    pub async fn get(&self, key: &[u8]) -> Result<Option<Vec<u8>>> { panic!() }
+    pub async fn read(&self, key: &[u8]) -> Result<Option<Vec<u8>>> { panic!() }
 }
