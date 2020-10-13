@@ -168,7 +168,7 @@ impl Store {
     }
 
     fn abort_batch(&self, batch: u64) {
-        panic!()
+        self.log.abort_batch(batch);
     }
 }
 
@@ -178,7 +178,7 @@ impl Store {
     }
 
     fn close_view(&self, view: u64) {
-        panic!()
+        self.log.close_view(view)
     }
 }
 
@@ -189,10 +189,10 @@ impl Log {
         let log_completion_cb = Arc::new(move |cmd, offset| {
             match cmd {
                 LogCommand::Write { batch, key, .. } => {
-                    completion_index.write(batch, &key, offset);
+                    completion_index.write_offset(batch, &key, offset);
                 }
                 LogCommand::Delete { batch, key } => {
-                    completion_index.delete(batch, &key, offset);
+                    completion_index.delete_offset(batch, &key, offset);
                 }
                 LogCommand::Commit { batch } => {
                     /* pass */
@@ -231,7 +231,7 @@ impl Log {
 
 impl Log {
     async fn read(&self, view: u64, key: &[u8]) -> Result<Option<Vec<u8>>> {
-        let offset = self.index.get_offset(view, key);
+        let offset = self.index.read_offset(view, key);
         if let Some(offset) = offset {
             Ok(Some(self.file.seek_read(offset, view, key).await?))
         } else {
@@ -348,11 +348,11 @@ impl LogIndex {
 }
 
 impl LogIndex {
-    fn write(&self, batch: u64, key: &[u8], offset: u64) {
+    fn write_offset(&self, batch: u64, key: &[u8], offset: u64) {
         panic!()
     }
 
-    fn delete(&self, batch: u64, key: &[u8], offset: u64) {
+    fn delete_offset(&self, batch: u64, key: &[u8], offset: u64) {
         panic!()
     }
 
@@ -362,7 +362,11 @@ impl LogIndex {
 }
 
 impl LogIndex {
-    fn get_offset(&self, view: u64, key: &[u8]) -> Option<u64> {
+    fn read_offset(&self, view: u64, key: &[u8]) -> Option<u64> {
+        panic!()
+    }
+
+    fn close_view(&self, view: u64) {
         panic!()
     }
 }
