@@ -6,8 +6,10 @@ use std::collections::BTreeMap;
 use anyhow::Result;
 
 mod fs_thread;
+mod logcmd;
 
 use fs_thread::FsThread;
+use logcmd::LogCommand;
 
 pub struct DbConfig {
     pub path: PathBuf,
@@ -174,7 +176,13 @@ impl Log {
     fn write(&self, batch: u64, key: &[u8], value: &[u8]) {
         let path = self.path.clone();
         self.fs_thread.run(|fs| {
-            let log = fs.open_append(&path)?;
+            let cmd = LogCommand::Write {
+                batch,
+                key: key.to_vec(),
+                value: value.to_vec(),
+            };
+            let mut log = fs.open_append(&path)?;
+            cmd.write(&mut log)?;
             Ok(())
         });
     }
