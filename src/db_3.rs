@@ -6,7 +6,7 @@ use std::sync::Mutex;
 use std::fs::File;
 use std::path::{PathBuf, Path};
 use std::collections::BTreeMap;
-use anyhow::Result;
+use anyhow::{Result, Error};
 
 mod fs_thread;
 mod logcmd;
@@ -27,19 +27,15 @@ pub struct Db {
     next_view: AtomicU64,
 }
 
-type LogResult = Result<(LogCommand, u64)>;
-type FutureLogResult = Box<dyn Future<Output = LogResult>>;
-type LogResults = BTreeMap<u64, Vec<FutureLogResult>>;
-
 struct Store {
     log: Log,
-    log_results: Arc<Mutex<LogResults>>,
     index: Index,
 }
 
 struct Log {
     path: Arc<PathBuf>,
     fs_thread: Arc<FsThread>,
+    errors: Arc<Mutex<BTreeMap<u64, Error>>>,
 }
 
 struct Index {
@@ -132,12 +128,10 @@ impl Store {
 
         let log_path = log_path(&path);
         let log = Log::open(path, fs_thread).await?;
-        let log_results = Arc::new(Mutex::new(BTreeMap::new()));
         let index = Index::new();
 
         return Ok(Store {
             log,
-            log_results,
             index,
         });
 
@@ -150,26 +144,15 @@ impl Store {
 impl Store {
 
     fn write(&self, batch: u64, key: &[u8], value: &[u8]) {
-        let result = self.log.append_write(batch, key, value);
-        let mut result_map = self.log_results.lock().expect("poison");
-        let mut result_vec = result_map.entry(batch).or_default();
-        result_vec.push(result);
+        self.log.append_write(batch, key, value);
     }
 
     fn delete(&self, batch: u64, key: &[u8]) {
-        let result = self.log.append_delete(batch, key);
-        let mut result_map = self.log_results.lock().expect("poison");
-        let mut result_vec = result_map.entry(batch).or_default();
-        result_vec.push(result);
+        self.log.append_delete(batch, key);
     }
 
     async fn commit_batch(&self, batch: u64) -> Result<()> {
-        let result = self.log.append_commit(batch);
-        let mut result_map = self.log_results.lock().expect("poisen");
-        let mut result_vec = result_map.entry(batch).or_default();
-        result_vec.push(result);
-
-        drop(result_vec);
+        self.log.commit_batch(batch);
 
         Ok(())
     }
@@ -201,7 +184,7 @@ impl Log {
 }
 
 impl Log {
-    fn append_write(&self, batch: u64, key: &[u8], value: &[u8]) -> FutureLogResult {
+    fn append_write(&self, batch: u64, key: &[u8], value: &[u8]) {
         let path = self.path.clone();
         let cmd = LogCommand::Write {
             batch,
@@ -212,11 +195,11 @@ impl Log {
             let mut log = fs.open_append(&path)?;
             let offset = log.seek(SeekFrom::End(0))?;
             cmd.write(&mut log)?;
-            Ok((cmd, offset))
-        })
+            Ok(())
+        });
     }
 
-    fn append_delete(&self, batch: u64, key: &[u8]) -> FutureLogResult {
+    fn append_delete(&self, batch: u64, key: &[u8]) {
         let path = self.path.clone();
         let cmd = LogCommand::Delete {
             batch,
@@ -226,11 +209,11 @@ impl Log {
             let mut log = fs.open_append(&path)?;
             let offset = log.seek(SeekFrom::End(0))?;
             cmd.write(&mut log)?;
-            Ok((cmd, offset))
-        })
+            Ok(())
+        });
     }
 
-    fn append_commit(&self, batch: u64) -> FutureLogResult {
+    async fn commit_batch(&self, batch: u64) -> Result<()> {
         let path = self.path.clone();
         let cmd = LogCommand::Commit {
             batch,
@@ -240,8 +223,10 @@ impl Log {
             let offset = log.seek(SeekFrom::End(0))?;
             cmd.write(&mut log)?;
             log.flush()?;
-            Ok((cmd, offset))
-        })
+            Ok(())
+        }).await?;
+
+        Ok(())
     }
 }
 

@@ -18,7 +18,7 @@ impl FsThread {
         panic!()
     }
 
-    pub fn run<F, R>(&self, f: F) -> Box<dyn Future<Output = Result<R>>>
+    pub fn run<F, R>(&self, f: F) -> Box<dyn Future<Output = Result<R>> + Unpin>
     where F: FnOnce(&mut FsThreadContext) -> Result<R> + Send,
           R: Send,
     {
