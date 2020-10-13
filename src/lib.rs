@@ -2,6 +2,7 @@
 
 use anyhow::Result;
 
+#[path = "db_2.rs"]
 mod imp;
 
 pub type DbConfig = imp::DbConfig;
