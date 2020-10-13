@@ -28,7 +28,7 @@ struct Store {
 }
 
 struct Log {
-    path: PathBuf,
+    path: Arc<PathBuf>,
     fs_thread: Arc<FsThread>,
 }
 
@@ -121,7 +121,7 @@ impl Store {
     async fn new(path: PathBuf, fs_thread: Arc<FsThread>) -> Result<Store> {
 
         let log_path = log_path(&path);
-        let log = Log::new(path, fs_thread).await?;
+        let log = Log::open(path, fs_thread).await?;
         let index = Index::new();
 
         return Ok(Store {
@@ -133,9 +133,12 @@ impl Store {
             panic!()
         }
     }
+}
+
+impl Store {
 
     fn write(&self, batch: u64, key: &[u8], value: &[u8]) {
-        panic!()
+        self.log.write(batch, key, value);
     }
 
     fn delete(&self, batch: u64, key: &[u8]) {
@@ -162,8 +165,18 @@ impl Store {
 }
 
 impl Log {
-    async fn new(path: PathBuf, fs_thread: Arc<FsThread>) -> Result<Log> {
+    async fn open(path: PathBuf, fs_thread: Arc<FsThread>) -> Result<Log> {
         panic!()
+    }
+}
+
+impl Log {
+    fn write(&self, batch: u64, key: &[u8], value: &[u8]) {
+        let path = self.path.clone();
+        self.fs_thread.run(|fs| {
+            let log = fs.open_append(&path)?;
+            Ok(())
+        });
     }
 }
 

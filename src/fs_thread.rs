@@ -1,3 +1,5 @@
+use std::path::Path;
+use std::fs::File;
 use anyhow::Result;
 
 pub struct FsThread;
@@ -25,6 +27,16 @@ impl FsThread {
 
 impl FsThread {
     fn shutdown(&mut self) {
+        panic!()
+    }
+}
+
+impl FsThreadContext {
+    pub fn open_append(&mut self, path: &Path) -> Result<&mut File> {
+        panic!()
+    }
+
+    pub fn close(&mut self, path: &Path) {
         panic!()
     }
 }
