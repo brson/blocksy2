@@ -1,3 +1,4 @@
+use std::collections::VecDeque;
 use std::io::{Seek, SeekFrom, Write};
 use std::future::Future;
 use std::sync::Arc;
@@ -42,6 +43,12 @@ struct Log {
 }
 
 struct Index {
+    map: Arc<Mutex<BTreeMap<Vec<u8>, VecDeque<(u64, u64)>>>>,
+}
+
+enum IndexEntry {
+    Filled(u64),
+    Deleted,
 }
 
 impl Db {
@@ -292,7 +299,9 @@ impl Log {
 
 impl Index {
     fn new() -> Index {
-        Index { }
+        Index {
+            map: Arc::new(Mutex::new(BTreeMap::new())),
+        }
     }
 }
 
