@@ -69,13 +69,34 @@ impl Db {
         next
     }
 
-    pub fn write(&self, tree: &str, batch: u64, key: &[u8], value: &[u8]) { panic!() }
+    pub fn write(&self, tree: &str, batch: u64, key: &[u8], value: &[u8]) {
+        let store = self.stores.get(tree).expect("tree");
+        store.write(batch, key, value);
+    }
 
-    pub fn delete(&self, tree: &str, batch: u64, key: &[u8]) { panic!() }
+    pub fn delete(&self, tree: &str, batch: u64, key: &[u8]) {
+        let store = self.stores.get(tree).expect("tree");
+        store.delete(batch, key);
+    }
 
-    pub async fn commit_batch(&self, batch: u64) -> Result<()> { panic!() }
+    pub async fn commit_batch(&self, batch: u64) -> Result<()> {
+        let mut last_result = Ok(());
+        for store in self.stores.values() {
+            if last_result.is_ok() {
+                last_result = store.commit_batch(batch).await;
+            } else {
+                store.abort_batch(batch);
+            }
+        }
 
-    pub fn abort_batch(&self, batch: u64) { panic!() }
+        last_result
+    }
+
+    pub fn abort_batch(&self, batch: u64) {
+        for store in self.stores.values() {
+            store.abort_batch(batch);
+        }
+    }
 }
 
 impl Db {
@@ -92,6 +113,22 @@ impl Db {
 
 impl Store {
     async fn new(path: PathBuf, fs_thread: Arc<FsThread>) -> Result<Store> {
+        panic!()
+    }
+
+    fn write(&self, batch: u64, key: &[u8], value: &[u8]) {
+        panic!()
+    }
+
+    fn delete(&self, batch: u64, key: &[u8]) {
+        panic!()
+    }
+
+    async fn commit_batch(&self, batch: u64) -> Result<()> {
+        panic!()
+    }
+
+    fn abort_batch(&self, batch: u64) {
         panic!()
     }
 }
