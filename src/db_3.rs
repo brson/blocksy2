@@ -225,7 +225,8 @@ impl Log {
     }
 
     fn abort_batch(&self, batch: u64) {
-        panic!()
+        self.index.abort_batch(batch);
+        self.file.abort_batch(batch);
     }
 }
 
@@ -240,7 +241,8 @@ impl Log {
     }
 
     fn close_view(&self, view: u64) {
-        panic!()
+        self.index.close_view(view);
+        self.file.close_view(view);
     }
 }
 
@@ -331,11 +333,19 @@ impl LogFile {
 
         Ok(())
     }
+
+    fn abort_batch(&self, batch: u64) {
+        /* noop - batch is aborted by absence of commit command */
+    }
 }
 
 impl LogFile {
     async fn seek_read(&self, offset: u64, view: u64, key: &[u8]) -> Result<Vec<u8>> {
         panic!()
+    }
+
+    fn close_view(&self, view: u64) {
+        /* noop */
     }
 }
 
@@ -357,6 +367,10 @@ impl LogIndex {
     }
 
     fn commit_batch(&self, batch: u64) {
+        panic!()
+    }
+
+    fn abort_batch(&self, batch: u64) {
         panic!()
     }
 }
