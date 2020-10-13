@@ -42,11 +42,9 @@ mod inner {
 
         pub fn delete(&self, tree: &str, batch: u64, key: &[u8]) -> Result<()> { panic!() }
 
-        pub fn commit_batch(&self, batch: u64) -> Result<()> { panic!() }
+        pub async fn commit_batch(&self, batch: u64) -> Result<()> { panic!() }
 
-        pub fn abort_batch(&self, batch: u64) -> Result<()> { panic!() }
-
-        pub async fn sync(&self) -> Result<()> { panic!() }
+        pub fn abort_batch(&self, batch: u64) { panic!() }
     }
 
     impl DbInner {
@@ -129,9 +127,13 @@ impl WriteBatch {
         }
     }
 
-    pub async fn commit(self) -> Result<()> { panic!() }
+    pub async fn commit(self) -> Result<()> {
+        Ok(self.db.commit_batch(self.batch).await?)
+    }
 
-    pub fn abort(self) { panic!() }
+    pub fn abort(self) {
+        self.db.abort_batch(self.batch)
+    }
 }
 
 impl ReadView {
