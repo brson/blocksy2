@@ -145,7 +145,6 @@ impl Store {
 }
 
 impl Store {
-
     fn write(&self, batch: u64, key: &[u8], value: &[u8]) {
         self.log.write(batch, key, value);
     }
