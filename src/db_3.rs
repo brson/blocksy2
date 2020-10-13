@@ -106,9 +106,16 @@ impl Db {
         next
     }
 
-    pub async fn read(&self, tree: &str, view: u64, key: &[u8]) -> Result<Option<Vec<u8>>> { panic!() }
+    pub async fn read(&self, tree: &str, view: u64, key: &[u8]) -> Result<Option<Vec<u8>>> {
+        let store = self.stores.get(tree).expect("tree");
+        Ok(store.read(view, key).await?)
+    }
 
-    pub fn close_view(&self, view: u64) { panic!() }
+    pub fn close_view(&self, view: u64) {
+        for store in self.stores.values() {
+            store.close_view(view);
+        }
+    }
 }
 
 impl Store {
@@ -129,6 +136,16 @@ impl Store {
     }
 
     fn abort_batch(&self, batch: u64) {
+        panic!()
+    }
+}
+
+impl Store {
+    async fn read(&self, view: u64, key: &[u8]) -> Result<Option<Vec<u8>>> {
+        panic!()
+    }
+
+    fn close_view(&self, view: u64) {
         panic!()
     }
 }
