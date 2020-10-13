@@ -24,7 +24,7 @@ pub struct DbConfig {
 pub struct Db {
     config: DbConfig,
     stores: BTreeMap<String, Store>,
-    fs_thread: Arc<FsThread>,
+    commit_log: CommitLog,
     next_batch: AtomicU64,
     next_view: AtomicU64,
 }
@@ -56,6 +56,12 @@ enum IndexEntry {
     Deleted,
 }
 
+struct CommitLog {
+    path: Arc<PathBuf>,
+    next_commit: Arc<AtomicU64>,
+    fs_thread: Arc<FsThread>,
+}
+
 impl Db {
     pub async fn open(config: DbConfig) -> Result<Db> {
         let fs_thread = FsThread::start()?;
@@ -68,10 +74,13 @@ impl Db {
             stores.insert(tree.clone(), store);
         }
 
+        let commit_log_path = paths::commit_log_path(&config.path)?;
+        let commit_log = CommitLog::new(commit_log_path, fs_thread.clone()).await?;
+
         return Ok(Db {
             config,
             stores,
-            fs_thread,
+            commit_log,
             next_batch: AtomicU64::new(0),
             next_view: AtomicU64::new(0),
         });
@@ -105,7 +114,9 @@ impl Db {
             }
         }
 
-        last_result
+        last_result?;
+
+        Ok(())
     }
 
     pub fn abort_batch(&self, batch: u64) {
@@ -137,7 +148,7 @@ impl Db {
 impl Store {
     async fn new(path: PathBuf, fs_thread: Arc<FsThread>) -> Result<Store> {
 
-        let log_path = paths::log_path(&path);
+        let log_path = paths::log_path(&path)?;
         let log = Log::open(path, fs_thread).await?;
 
         return Ok(Store {
@@ -405,6 +416,12 @@ impl LogIndex {
     }
 
     fn close_view(&self, view: u64) {
+        panic!()
+    }
+}
+
+impl CommitLog {
+    async fn new(path: PathBuf, fs_thread: Arc<FsThread>) -> Result<CommitLog> {
         panic!()
     }
 }
