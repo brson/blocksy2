@@ -210,11 +210,11 @@ impl Log {
 
 impl Log {
     fn write(&self, batch: u64, key: &[u8], value: &[u8]) {
-        self.file.append_write(batch, key, value);
+        self.file.write(batch, key, value);
     }
 
     fn delete(&self, batch: u64, key: &[u8]) {
-        self.file.append_delete(batch, key);
+        self.file.delete(batch, key);
     }
 
     async fn commit_batch(&self, batch: u64) -> Result<()> {
@@ -254,7 +254,7 @@ impl LogFile {
 }
 
 impl LogFile {
-    fn append_write(&self, batch: u64, key: &[u8], value: &[u8]) {
+    fn write(&self, batch: u64, key: &[u8], value: &[u8]) {
         let path = self.path.clone();
         let cmd = LogCommand::Write {
             batch,
@@ -278,7 +278,7 @@ impl LogFile {
         });
     }
 
-    fn append_delete(&self, batch: u64, key: &[u8]) {
+    fn delete(&self, batch: u64, key: &[u8]) {
         let path = self.path.clone();
         let cmd = LogCommand::Delete {
             batch,
