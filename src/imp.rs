@@ -38,9 +38,9 @@ mod inner {
     impl DbInner {
         pub fn new_batch(&self) -> u64 { panic!() }
 
-        pub fn write(&self, tree: &str, batch: u64, key: &[u8], value: &[u8]) -> Result<()> { panic!() }
+        pub fn write(&self, tree: &str, batch: u64, key: &[u8], value: &[u8]) { panic!() }
 
-        pub fn delete(&self, tree: &str, batch: u64, key: &[u8]) -> Result<()> { panic!() }
+        pub fn delete(&self, tree: &str, batch: u64, key: &[u8]) { panic!() }
 
         pub async fn commit_batch(&self, batch: u64) -> Result<()> { panic!() }
 
@@ -50,7 +50,7 @@ mod inner {
     impl DbInner {
         pub fn new_view(&self) -> u64 { panic!() }
 
-        pub fn read(&self, tree: &str, view: u64, key: &[u8]) -> Result<Option<Vec<u8>>> { panic!() }
+        pub async fn read(&self, tree: &str, view: u64, key: &[u8]) -> Result<Option<Vec<u8>>> { panic!() }
 
         pub fn close_view(&self, view: u64) { panic!() }
     }
