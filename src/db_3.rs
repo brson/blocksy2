@@ -29,7 +29,11 @@ pub struct Db {
 }
 
 struct Store {
-    log: LogFile,
+    log: Log,
+}
+
+struct Log {
+    file: LogFile,
     index: Arc<LogIndex>,
 }
 
@@ -137,6 +141,51 @@ impl Store {
     async fn new(path: PathBuf, fs_thread: Arc<FsThread>) -> Result<Store> {
 
         let log_path = log_path(&path);
+        let log = Log::open(path, fs_thread).await?;
+
+        return Ok(Store {
+            log,
+        });
+
+        fn log_path(path: &Path) -> PathBuf {
+            panic!()
+        }
+    }
+}
+
+impl Store {
+
+    fn write(&self, batch: u64, key: &[u8], value: &[u8]) {
+        self.log.write(batch, key, value);
+    }
+
+    fn delete(&self, batch: u64, key: &[u8]) {
+        self.log.delete(batch, key);
+    }
+
+    async fn commit_batch(&self, batch: u64) -> Result<()> {
+        self.log.commit_batch(batch).await?;
+
+        Ok(())
+    }
+
+    fn abort_batch(&self, batch: u64) {
+        panic!()
+    }
+}
+
+impl Store {
+    async fn read(&self, view: u64, key: &[u8]) -> Result<Option<Vec<u8>>> {
+        Ok(self.log.read(view, key).await?)
+    }
+
+    fn close_view(&self, view: u64) {
+        panic!()
+    }
+}
+
+impl Log {
+    async fn open(path: PathBuf, fs_thread: Arc<FsThread>) -> Result<Log> {
         let index = Arc::new(LogIndex::new());
         let completion_index = index.clone();
         let log_completion_cb = Arc::new(move |cmd, offset| {
@@ -152,31 +201,26 @@ impl Store {
                 }
             }
         });
-        let log = LogFile::open(path, fs_thread, log_completion_cb).await?;
+        let file = LogFile::open(path, fs_thread, log_completion_cb).await?;
 
-        return Ok(Store {
-            log,
+        Ok(Log {
+            file,
             index,
-        });
-
-        fn log_path(path: &Path) -> PathBuf {
-            panic!()
-        }
+        })
     }
 }
 
-impl Store {
-
+impl Log {
     fn write(&self, batch: u64, key: &[u8], value: &[u8]) {
-        self.log.append_write(batch, key, value);
+        self.file.append_write(batch, key, value);
     }
 
     fn delete(&self, batch: u64, key: &[u8]) {
-        self.log.append_delete(batch, key);
+        self.file.append_delete(batch, key);
     }
 
     async fn commit_batch(&self, batch: u64) -> Result<()> {
-        self.log.commit_batch(batch).await?;
+        self.file.commit_batch(batch).await?;
         self.index.commit_batch(batch);
 
         Ok(())
@@ -187,11 +231,11 @@ impl Store {
     }
 }
 
-impl Store {
+impl Log {
     async fn read(&self, view: u64, key: &[u8]) -> Result<Option<Vec<u8>>> {
         let offset = self.index.get_offset(view, key);
         if let Some(offset) = offset {
-            Ok(Some(self.log.seek_read(offset, view, key).await?))
+            Ok(Some(self.file.seek_read(offset, view, key).await?))
         } else {
             Ok(None)
         }
