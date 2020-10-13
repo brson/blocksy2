@@ -140,11 +140,11 @@ impl Store {
 impl Store {
 
     fn write(&self, batch: u64, key: &[u8], value: &[u8]) {
-        self.log.write(batch, key, value);
+        self.log.append_write(batch, key, value);
     }
 
     fn delete(&self, batch: u64, key: &[u8]) {
-        panic!()
+        self.log.append_delete(batch, key);
     }
 
     async fn commit_batch(&self, batch: u64) -> Result<()> {
@@ -158,7 +158,12 @@ impl Store {
 
 impl Store {
     async fn read(&self, view: u64, key: &[u8]) -> Result<Option<Vec<u8>>> {
-        panic!()
+        let offset = self.index.get_offset(view, key);
+        if let Some(offset) = offset {
+            Ok(Some(self.log.seek_read(offset, view, key).await?))
+        } else {
+            Ok(None)
+        }
     }
 
     fn close_view(&self, view: u64) {
@@ -173,14 +178,27 @@ impl Log {
 }
 
 impl Log {
-    fn write(&self, batch: u64, key: &[u8], value: &[u8]) {
+    fn append_write(&self, batch: u64, key: &[u8], value: &[u8]) {
         let path = self.path.clone();
+        let cmd = LogCommand::Write {
+            batch,
+            key: key.to_vec(),
+            value: value.to_vec(),
+        };
         self.fs_thread.run(|fs| {
-            let cmd = LogCommand::Write {
-                batch,
-                key: key.to_vec(),
-                value: value.to_vec(),
-            };
+            let mut log = fs.open_append(&path)?;
+            cmd.write(&mut log)?;
+            Ok(())
+        });
+    }
+
+    fn append_delete(&self, batch: u64, key: &[u8]) {
+        let path = self.path.clone();
+        let cmd = LogCommand::Delete {
+            batch,
+            key: key.to_vec(),
+        };
+        self.fs_thread.run(|fs| {
             let mut log = fs.open_append(&path)?;
             cmd.write(&mut log)?;
             Ok(())
@@ -188,8 +206,26 @@ impl Log {
     }
 }
 
+impl Log {
+    async fn seek_read(&self, offset: u64, view: u64, key: &[u8]) -> Result<Vec<u8>> {
+        panic!()
+    }
+}
+
 impl Index {
     fn new() -> Index {
         Index { }
+    }
+}
+
+impl Index {
+    fn set_offset(&self, view: u64, key: &[u8], offset: u64) -> Option<u64> {
+        panic!()
+    }
+}
+
+impl Index {
+    fn get_offset(&self, view: u64, key: &[u8]) -> Option<u64> {
+        panic!()
     }
 }
