@@ -6,10 +6,11 @@ pub struct DbConfig {
     trees: Vec<String>,
 }
 
+#[derive(Clone)]
 pub struct Db;
 
 impl Db {
-    pub fn open(config: DbConfig) -> Result<Db> { panic!() }
+    pub async fn open(config: DbConfig) -> Result<Db> { panic!() }
 
     pub fn read_view(&self) -> ReadView { panic!() }
 
@@ -27,13 +28,13 @@ pub struct WriteBatch;
 impl WriteBatch {
     pub fn tree(&self) -> Result<WriteTree> { panic!() }
 
-    pub fn commit(self) -> Result<()> { panic!() }
+    pub async fn commit(self) -> Result<()> { panic!() }
 }
 
 pub struct ReadTree;
 
 impl ReadTree {
-    pub fn get(&self, key: &[u8]) -> Result<Option<IVec>> { panic!() }
+    pub async fn get(&self, key: &[u8]) -> Result<Option<IVec>> { panic!() }
 }
 
 pub struct WriteTree;
@@ -44,4 +45,5 @@ impl WriteTree {
     pub fn remove(&mut self, key: &[u8]) -> Result<()> { panic!() }
 }
 
+#[derive(Clone)]
 pub struct IVec;

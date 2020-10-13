@@ -6,15 +6,19 @@ mod imp;
 
 pub type DbConfig = imp::DbConfig;
 
+#[derive(Clone)]
 pub struct Db(imp::Db);
+
 pub struct ReadView(imp::ReadView);
 pub struct WriteBatch(imp::WriteBatch);
 pub struct ReadTree(imp::ReadTree);
 pub struct WriteTree(imp::WriteTree);
+
+#[derive(Clone)]
 pub struct IVec(imp::IVec);
 
 impl Db {
-    pub fn open(config: DbConfig) -> Result<Db> { imp::Db::open(config).map(Db) }
+    pub async fn open(config: DbConfig) -> Result<Db> { imp::Db::open(config).await.map(Db) }
     pub fn read_view(&self) -> ReadView { ReadView(self.0.read_view()) }
     pub fn write_batch(&self) -> WriteBatch { WriteBatch(self.0.write_batch()) }
 }
@@ -25,11 +29,11 @@ impl ReadView {
 
 impl WriteBatch {
     pub fn tree(&self) -> Result<WriteTree> { self.0.tree().map(WriteTree) }
-    pub fn commit(self) -> Result<()> { self.0.commit() }
+    pub async fn commit(self) -> Result<()> { self.0.commit().await }
 }
 
 impl ReadTree {
-    pub fn get(&self, key: &[u8]) -> Result<Option<IVec>> { self.0.get(key).map(|o| o.map(IVec)) }
+    pub async fn get(&self, key: &[u8]) -> Result<Option<IVec>> { self.0.get(key).await.map(|o| o.map(IVec)) }
 }
 
 impl WriteTree {
