@@ -1,13 +1,30 @@
-use std::path::PathBuf;
+use std::sync::Arc;
 use anyhow::Result;
 
-pub struct DbConfig {
-    path: PathBuf,
-    trees: Vec<String>,
+mod inner {
+    use std::path::PathBuf;
+    use std::collections::BTreeMap;
+
+    pub struct DbConfig {
+        path: PathBuf,
+        trees: Vec<String>,
+    }
+
+    pub struct DbInner {
+        pub config: DbConfig,
+        pub stores: BTreeMap<String, Store>,
+    }
+
+    pub struct Store {
+    }
 }
 
+use inner::DbInner;
+
+pub type DbConfig = inner::DbConfig;
+
 #[derive(Clone)]
-pub struct Db;
+pub struct Db(Arc<DbInner>);
 
 impl Db {
     pub async fn open(config: DbConfig) -> Result<Db> { panic!() }
