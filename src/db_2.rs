@@ -1,5 +1,6 @@
 use std::sync::Arc;
 use anyhow::Result;
+use log::warn;
 
 #[path = "db_3.rs"]
 mod imp;
@@ -54,7 +55,8 @@ impl Db {
 impl Drop for WriteBatch {
     fn drop(&mut self) {
         if !self.destructed {
-            panic!("write batch not committed or aborted");
+            warn!("write batch dropped without committing or aborting. aborting now");
+            self.db.abort_batch(self.batch);
         }
     }
 }

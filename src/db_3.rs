@@ -1,7 +1,12 @@
+use std::sync::Arc;
 use std::fs::File;
-use std::path::PathBuf;
+use std::path::{PathBuf, Path};
 use std::collections::BTreeMap;
 use anyhow::Result;
+
+mod fs_thread;
+
+use fs_thread::FsThread;
 
 pub struct DbConfig {
     pub path: PathBuf,
@@ -11,6 +16,7 @@ pub struct DbConfig {
 pub struct Db {
     config: DbConfig,
     stores: BTreeMap<String, Store>,
+    fs_thread: Arc<FsThread>,
 }
 
 struct Store {
@@ -20,7 +26,8 @@ struct Store {
 }
 
 struct Log {
-    file: File,
+    path: PathBuf,
+    fs_thread: Arc<FsThread>,
 }
 
 struct Index {
@@ -28,7 +35,27 @@ struct Index {
 }
 
 impl Db {
-    pub async fn open(config: DbConfig) -> Result<Db> { panic!() }
+    pub async fn open(config: DbConfig) -> Result<Db> {
+        let fs_thread = FsThread::start()?;
+        let fs_thread = Arc::new(fs_thread);
+        let mut stores = BTreeMap::new();
+
+        for tree in &config.trees {
+            let path = tree_path(&config.path, tree)?;
+            let store = Store::new(path, fs_thread.clone()).await?;
+            stores.insert(tree.clone(), store);
+        }
+
+        return Ok(Db {
+            config,
+            stores,
+            fs_thread,
+        });
+
+        fn tree_path(dir: &Path, tree: &str) -> Result<PathBuf> {
+            panic!()
+        }
+    }
 }
 
 impl Db {
@@ -49,4 +76,10 @@ impl Db {
     pub async fn read(&self, tree: &str, view: u64, key: &[u8]) -> Result<Option<Vec<u8>>> { panic!() }
 
     pub fn close_view(&self, view: u64) { panic!() }
+}
+
+impl Store {
+    async fn new(path: PathBuf, fs_thread: Arc<FsThread>) -> Result<Store> {
+        panic!()
+    }
 }
