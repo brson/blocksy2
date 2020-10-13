@@ -47,7 +47,7 @@ struct LogFile {
 }
 
 struct LogIndex {
-    map: Arc<Mutex<BTreeMap<Vec<u8>, VecDeque<(u64, u64)>>>>,
+    map: Arc<Mutex<BTreeMap<Vec<u8>, Vec<(u64, IndexEntry)>>>>,
 }
 
 enum IndexEntry {
