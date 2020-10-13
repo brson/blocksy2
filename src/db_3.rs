@@ -29,12 +29,15 @@ pub struct Db {
 
 struct Store {
     log: Log,
-    index: Index,
+    index: Arc<Index>,
 }
+
+type LogCompletionCallback = Arc<dyn Fn(LogCommand, u64) + Send + Sync>;
 
 struct Log {
     path: Arc<PathBuf>,
     fs_thread: Arc<FsThread>,
+    completion_cb: LogCompletionCallback,
     errors: Arc<Mutex<BTreeMap<u64, Error>>>,
 }
 
@@ -127,8 +130,12 @@ impl Store {
     async fn new(path: PathBuf, fs_thread: Arc<FsThread>) -> Result<Store> {
 
         let log_path = log_path(&path);
-        let log = Log::open(path, fs_thread).await?;
-        let index = Index::new();
+        let index = Arc::new(Index::new());
+        let completion_index = index.clone();
+        let log_completion_cb = Arc::new(|cmd, offset| {
+            panic!()
+        });
+        let log = Log::open(path, fs_thread, log_completion_cb).await?;
 
         return Ok(Store {
             log,
@@ -178,7 +185,8 @@ impl Store {
 }
 
 impl Log {
-    async fn open(path: PathBuf, fs_thread: Arc<FsThread>) -> Result<Log> {
+    async fn open(path: PathBuf, fs_thread: Arc<FsThread>,
+                  completion_cb: LogCompletionCallback) -> Result<Log> {
         panic!()
     }
 }
@@ -191,10 +199,12 @@ impl Log {
             key: key.to_vec(),
             value: value.to_vec(),
         };
+        let completion_cb = self.completion_cb.clone();
         self.fs_thread.run(move |fs| {
             let mut log = fs.open_append(&path)?;
             let offset = log.seek(SeekFrom::End(0))?;
             cmd.write(&mut log)?;
+            completion_cb(cmd, offset);
             Ok(())
         });
     }
@@ -205,10 +215,12 @@ impl Log {
             batch,
             key: key.to_vec(),
         };
+        let completion_cb = self.completion_cb.clone();
         self.fs_thread.run(move |fs| {
             let mut log = fs.open_append(&path)?;
             let offset = log.seek(SeekFrom::End(0))?;
             cmd.write(&mut log)?;
+            completion_cb(cmd, offset);
             Ok(())
         });
     }
@@ -218,11 +230,13 @@ impl Log {
         let cmd = LogCommand::Commit {
             batch,
         };
+        let completion_cb = self.completion_cb.clone();
         self.fs_thread.run(move |fs| {
             let mut log = fs.open_append(&path)?;
             let offset = log.seek(SeekFrom::End(0))?;
             cmd.write(&mut log)?;
             log.flush()?;
+            completion_cb(cmd, offset);
             Ok(())
         }).await?;
 
