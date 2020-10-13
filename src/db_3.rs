@@ -132,8 +132,18 @@ impl Store {
         let log_path = log_path(&path);
         let index = Arc::new(Index::new());
         let completion_index = index.clone();
-        let log_completion_cb = Arc::new(|cmd, offset| {
-            panic!()
+        let log_completion_cb = Arc::new(move |cmd, offset| {
+            match cmd {
+                LogCommand::Write { batch, key, .. } => {
+                    completion_index.write(batch, &key, offset);
+                }
+                LogCommand::Delete { batch, key } => {
+                    completion_index.delete(batch, &key, offset);
+                }
+                LogCommand::Commit { batch } => {
+                    /* pass */
+                }
+            }
         });
         let log = Log::open(path, fs_thread, log_completion_cb).await?;
 
@@ -159,7 +169,8 @@ impl Store {
     }
 
     async fn commit_batch(&self, batch: u64) -> Result<()> {
-        self.log.commit_batch(batch);
+        self.log.commit_batch(batch).await?;
+        self.index.commit_batch(batch);
 
         Ok(())
     }
@@ -287,7 +298,15 @@ impl Index {
 }
 
 impl Index {
-    fn set_offset(&self, view: u64, key: &[u8], offset: u64) -> Option<u64> {
+    fn write(&self, batch: u64, key: &[u8], offset: u64) {
+        panic!()
+    }
+
+    fn delete(&self, batch: u64, key: &[u8], offset: u64) {
+        panic!()
+    }
+
+    fn commit_batch(&self, batch: u64) {
         panic!()
     }
 }
