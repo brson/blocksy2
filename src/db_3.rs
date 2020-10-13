@@ -29,20 +29,20 @@ pub struct Db {
 }
 
 struct Store {
-    log: Log,
-    index: Arc<Index>,
+    log: LogFile,
+    index: Arc<LogIndex>,
 }
 
 type LogCompletionCallback = Arc<dyn Fn(LogCommand, u64) + Send + Sync>;
 
-struct Log {
+struct LogFile {
     path: Arc<PathBuf>,
     fs_thread: Arc<FsThread>,
     completion_cb: LogCompletionCallback,
     errors: Arc<Mutex<BTreeMap<u64, Vec<Error>>>>,
 }
 
-struct Index {
+struct LogIndex {
     map: Arc<Mutex<BTreeMap<Vec<u8>, VecDeque<(u64, u64)>>>>,
 }
 
@@ -137,7 +137,7 @@ impl Store {
     async fn new(path: PathBuf, fs_thread: Arc<FsThread>) -> Result<Store> {
 
         let log_path = log_path(&path);
-        let index = Arc::new(Index::new());
+        let index = Arc::new(LogIndex::new());
         let completion_index = index.clone();
         let log_completion_cb = Arc::new(move |cmd, offset| {
             match cmd {
@@ -152,7 +152,7 @@ impl Store {
                 }
             }
         });
-        let log = Log::open(path, fs_thread, log_completion_cb).await?;
+        let log = LogFile::open(path, fs_thread, log_completion_cb).await?;
 
         return Ok(Store {
             log,
@@ -202,14 +202,14 @@ impl Store {
     }
 }
 
-impl Log {
+impl LogFile {
     async fn open(path: PathBuf, fs_thread: Arc<FsThread>,
-                  completion_cb: LogCompletionCallback) -> Result<Log> {
+                  completion_cb: LogCompletionCallback) -> Result<LogFile> {
         panic!()
     }
 }
 
-impl Log {
+impl LogFile {
     fn append_write(&self, batch: u64, key: &[u8], value: &[u8]) {
         let path = self.path.clone();
         let cmd = LogCommand::Write {
@@ -291,21 +291,21 @@ impl Log {
     }
 }
 
-impl Log {
+impl LogFile {
     async fn seek_read(&self, offset: u64, view: u64, key: &[u8]) -> Result<Vec<u8>> {
         panic!()
     }
 }
 
-impl Index {
-    fn new() -> Index {
-        Index {
+impl LogIndex {
+    fn new() -> LogIndex {
+        LogIndex {
             map: Arc::new(Mutex::new(BTreeMap::new())),
         }
     }
 }
 
-impl Index {
+impl LogIndex {
     fn write(&self, batch: u64, key: &[u8], offset: u64) {
         panic!()
     }
@@ -319,7 +319,7 @@ impl Index {
     }
 }
 
-impl Index {
+impl LogIndex {
     fn get_offset(&self, view: u64, key: &[u8]) -> Option<u64> {
         panic!()
     }
