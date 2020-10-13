@@ -1,3 +1,4 @@
+use std::future::Future;
 use std::path::Path;
 use std::fs::File;
 use anyhow::Result;
@@ -17,7 +18,7 @@ impl FsThread {
         panic!()
     }
 
-    pub async fn run<F, R>(&self, f: F) -> Result<R>
+    pub fn run<F, R>(&self, f: F) -> Box<dyn Future<Output = Result<R>>>
     where F: FnOnce(&mut FsThreadContext) -> Result<R> + Send,
           R: Send,
     {
