@@ -24,8 +24,7 @@ pub struct Db {
     config: DbConfig,
     stores: BTreeMap<String, Store>,
     fs_thread: Arc<FsThread>,
-    next_batch: AtomicU64,
-    next_view: AtomicU64,
+    next_batch_view: AtomicU64,
 }
 
 struct Store {
@@ -71,8 +70,7 @@ impl Db {
             config,
             stores,
             fs_thread,
-            next_batch: AtomicU64::new(0),
-            next_view: AtomicU64::new(0),
+            next_batch_view: AtomicU64::new(0),
         });
 
         fn tree_path(dir: &Path, tree: &str) -> Result<PathBuf> {
@@ -83,7 +81,7 @@ impl Db {
 
 impl Db {
     pub fn new_batch(&self) -> u64 {
-        let next = self.next_batch.fetch_add(1, Ordering::Relaxed);
+        let next = self.next_batch_view.fetch_add(1, Ordering::Relaxed);
         assert_ne!(next, u64::max_value());
         next
     }
@@ -120,7 +118,7 @@ impl Db {
 
 impl Db {
     pub fn new_view(&self) -> u64 {
-        let next = self.next_view.fetch_add(1, Ordering::Relaxed);
+        let next = self.next_batch_view.fetch_add(1, Ordering::Relaxed);
         assert_ne!(next, u64::max_value());
         next
     }
