@@ -31,8 +31,8 @@ impl ReadView {
 }
 
 impl<'batch> WriteTree<'batch> {
-    pub fn write(&mut self, key: &[u8], value: &[u8]) { self.0.write(key, value) }
-    pub fn delete(&mut self, key: &[u8]) { self.0.delete(key) }
+    pub fn write(&self, key: &[u8], value: &[u8]) { self.0.write(key, value) }
+    pub fn delete(&self, key: &[u8]) { self.0.delete(key) }
 }
 
 impl<'view> ReadTree<'view> {

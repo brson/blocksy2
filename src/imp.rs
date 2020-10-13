@@ -146,11 +146,17 @@ impl ReadView {
 }
 
 impl<'batch> WriteTree<'batch> {
-    pub fn write(&mut self, key: &[u8], value: &[u8]) { panic!() }
+    pub fn write(&self, key: &[u8], value: &[u8]) {
+        self.batch.db.write(&self.tree, self.batch.batch, key, value)
+    }
 
-    pub fn delete(&mut self, key: &[u8]) { panic!() }
+    pub fn delete(&self, key: &[u8]) {
+        self.batch.db.delete(&self.tree, self.batch.batch, key)
+    }
 }
 
 impl<'view> ReadTree<'view> {
-    pub async fn read(&self, key: &[u8]) -> Result<Option<Vec<u8>>> { panic!() }
+    pub async fn read(&self, key: &[u8]) -> Result<Option<Vec<u8>>> {
+        Ok(self.view.db.read(&self.tree, self.view.view, key).await?)
+    }
 }
