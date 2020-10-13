@@ -241,7 +241,15 @@ impl Log {
 impl LogFile {
     async fn open(path: PathBuf, fs_thread: Arc<FsThread>,
                   completion_cb: LogCompletionCallback) -> Result<LogFile> {
-        panic!()
+        let path = Arc::new(path);
+        let errors = Arc::new(Mutex::new(BTreeMap::new()));
+
+        Ok(LogFile {
+            path,
+            fs_thread,
+            completion_cb,
+            errors,
+        })
     }
 }
 
@@ -327,7 +335,8 @@ impl LogFile {
     }
 
     fn abort_batch(&self, batch: u64) {
-        /* noop - batch is aborted by absence of commit command */
+        let mut error_guard = self.errors.lock().expect("poison");
+        let mut errors = error_guard.remove(&batch).unwrap_or_default();
     }
 }
 
