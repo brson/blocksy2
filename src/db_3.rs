@@ -364,8 +364,7 @@ impl LogFile {
         }).await?;
 
         let entry = match cmd {
-            LogCommand::Write { batch, key, value } => {
-                assert!(batch < view);
+            LogCommand::Write { value, .. } => {
                 value
             }
             LogCommand::Delete { .. } => {
