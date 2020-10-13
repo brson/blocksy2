@@ -341,7 +341,28 @@ impl LogFile {
 
 impl LogFile {
     async fn seek_read(&self, offset: u64, view: u64, key: &[u8]) -> Result<Vec<u8>> {
-        panic!()
+        let path = self.path.clone();
+        let cmd = self.fs_thread.run(move |fs| -> Result<LogCommand> {
+            let mut log = fs.open_read(&path)?;
+            log.seek(SeekFrom::Start(offset))?;
+            let cmd = LogCommand::read(&mut log)?;
+            Ok(cmd)
+        }).await?;
+
+        let entry = match cmd {
+            LogCommand::Write { batch, key, value } => {
+                assert!(batch < view);
+                value
+            }
+            LogCommand::Delete { .. } => {
+                panic!("unexpected log delete command");
+            }
+            LogCommand::Commit { .. } => {
+                panic!("unexpected log commit command");
+            }
+        };
+
+        Ok(entry)
     }
 
     fn close_view(&self, view: u64) {

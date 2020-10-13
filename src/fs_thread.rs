@@ -37,6 +37,10 @@ impl FsThreadContext {
         panic!()
     }
 
+    pub fn open_read(&mut self, path: &Path) -> Result<&mut File> {
+        panic!()
+    }
+
     pub fn close(&mut self, path: &Path) {
         panic!()
     }
