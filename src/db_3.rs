@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::fs::File;
 use std::path::{PathBuf, Path};
 use std::collections::BTreeMap;
@@ -17,12 +18,13 @@ pub struct Db {
     config: DbConfig,
     stores: BTreeMap<String, Store>,
     fs_thread: Arc<FsThread>,
+    next_batch: AtomicU64,
+    next_view: AtomicU64,
 }
 
 struct Store {
     log: Log,
     index: Index,
-    next_batch: u64,
 }
 
 struct Log {
@@ -50,6 +52,8 @@ impl Db {
             config,
             stores,
             fs_thread,
+            next_batch: AtomicU64::new(0),
+            next_view: AtomicU64::new(0),
         });
 
         fn tree_path(dir: &Path, tree: &str) -> Result<PathBuf> {
@@ -59,7 +63,11 @@ impl Db {
 }
 
 impl Db {
-    pub fn new_batch(&self) -> u64 { panic!() }
+    pub fn new_batch(&self) -> u64 {
+        let next = self.next_batch.fetch_add(1, Ordering::Relaxed);
+        assert_ne!(next, u64::max_value());
+        next
+    }
 
     pub fn write(&self, tree: &str, batch: u64, key: &[u8], value: &[u8]) { panic!() }
 
@@ -71,7 +79,11 @@ impl Db {
 }
 
 impl Db {
-    pub fn new_view(&self) -> u64 { panic!() }
+    pub fn new_view(&self) -> u64 {
+        let next = self.next_view.fetch_add(1, Ordering::Relaxed);
+        assert_ne!(next, u64::max_value());
+        next
+    }
 
     pub async fn read(&self, tree: &str, view: u64, key: &[u8]) -> Result<Option<Vec<u8>>> { panic!() }
 
