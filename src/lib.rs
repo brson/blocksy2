@@ -1,49 +1,47 @@
 #![allow(unused)]
 
-use std::path::PathBuf;
 use anyhow::Result;
 
-struct DbConfig {
-    path: PathBuf,
-    trees: Vec<String>,
-}
+mod imp;
 
-struct Db;
+pub type DbConfig = imp::DbConfig;
+
+pub struct Db(imp::Db);
 
 impl Db {
-    fn open(config: DbConfig) -> Result<Db> { panic!() }
+    pub fn open(config: DbConfig) -> Result<Db> { imp::Db::open(config).map(Db) }
 
-    fn read_view(&self) -> ReadView { panic!() }
+    pub fn read_view(&self) -> ReadView { ReadView(self.0.read_view()) }
 
-    fn write_batch(&self) -> WriteBatch { panic!() }
+    pub fn write_batch(&self) -> WriteBatch { WriteBatch(self.0.write_batch()) }
 }
 
-struct ReadView;
+pub struct ReadView(imp::ReadView);
 
 impl ReadView {
-    fn tree(&self) -> Result<&ReadTree> { panic!() }
+    pub fn tree(&self) -> Result<ReadTree> { self.0.tree().map(ReadTree) }
 }
 
-struct WriteBatch;
+pub struct WriteBatch(imp::WriteBatch);
 
 impl WriteBatch {
-    fn tree(&self) -> Result<&mut WriteTree> { panic!() }
+    pub fn tree(&self) -> Result<WriteTree> { self.0.tree().map(WriteTree) }
 
-    fn commit(self) -> Result<()> { panic!() }
+    pub fn commit(self) -> Result<()> { self.0.commit() }
 }
 
-struct ReadTree;
+pub struct ReadTree(imp::ReadTree);
 
 impl ReadTree {
-    fn get(&self, key: &[u8]) -> Result<Option<IVec>> { panic!() }
+    pub fn get(&self, key: &[u8]) -> Result<Option<IVec>> { self.0.get(key).map(|o| o.map(IVec)) }
 }
 
-struct WriteTree;
+pub struct WriteTree(imp::WriteTree);
 
 impl WriteTree {
-    fn insert(&mut self, key: &[u8], value: &[u8]) -> Result<()> { panic!() }
+    pub fn insert(&mut self, key: &[u8], value: &[u8]) -> Result<()> { self.0.insert(key, value) }
 
-    fn remove(&mut self, key: &[u8]) -> Result<()> { panic!() }
+    pub fn remove(&mut self, key: &[u8]) -> Result<()> { self.0.remove(key) }
 }
 
-struct IVec;
+pub struct IVec(imp::IVec);
