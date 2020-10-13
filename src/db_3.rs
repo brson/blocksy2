@@ -33,7 +33,6 @@ struct Log {
 }
 
 struct Index {
-    location: BTreeMap<Vec<u8>, u64>,
 }
 
 impl Db {
@@ -120,7 +119,19 @@ impl Db {
 
 impl Store {
     async fn new(path: PathBuf, fs_thread: Arc<FsThread>) -> Result<Store> {
-        panic!()
+
+        let log_path = log_path(&path);
+        let log = Log::new(path, fs_thread).await?;
+        let index = Index::new();
+
+        return Ok(Store {
+            log,
+            index,
+        });
+
+        fn log_path(path: &Path) -> PathBuf {
+            panic!()
+        }
     }
 
     fn write(&self, batch: u64, key: &[u8], value: &[u8]) {
@@ -147,5 +158,17 @@ impl Store {
 
     fn close_view(&self, view: u64) {
         panic!()
+    }
+}
+
+impl Log {
+    async fn new(path: PathBuf, fs_thread: Arc<FsThread>) -> Result<Log> {
+        panic!()
+    }
+}
+
+impl Index {
+    fn new() -> Index {
+        Index { }
     }
 }
