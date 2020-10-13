@@ -11,6 +11,7 @@ use anyhow::{Result, Error};
 
 mod fs_thread;
 mod logcmd;
+mod paths;
 
 use fs_thread::FsThread;
 use logcmd::LogCommand;
@@ -61,7 +62,7 @@ impl Db {
         let mut stores = BTreeMap::new();
 
         for tree in &config.trees {
-            let path = tree_path(&config.path, tree)?;
+            let path = paths::tree_path(&config.path, tree)?;
             let store = Store::new(path, fs_thread.clone()).await?;
             stores.insert(tree.clone(), store);
         }
@@ -72,10 +73,6 @@ impl Db {
             fs_thread,
             next_batch_view: AtomicU64::new(0),
         });
-
-        fn tree_path(dir: &Path, tree: &str) -> Result<PathBuf> {
-            panic!()
-        }
     }
 }
 
@@ -138,16 +135,12 @@ impl Db {
 impl Store {
     async fn new(path: PathBuf, fs_thread: Arc<FsThread>) -> Result<Store> {
 
-        let log_path = log_path(&path);
+        let log_path = paths::log_path(&path);
         let log = Log::open(path, fs_thread).await?;
 
         return Ok(Store {
             log,
         });
-
-        fn log_path(path: &Path) -> PathBuf {
-            panic!()
-        }
     }
 }
 
