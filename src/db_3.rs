@@ -38,7 +38,7 @@ struct Log {
     path: Arc<PathBuf>,
     fs_thread: Arc<FsThread>,
     completion_cb: LogCompletionCallback,
-    errors: Arc<Mutex<BTreeMap<u64, Error>>>,
+    errors: Arc<Mutex<BTreeMap<u64, Vec<Error>>>>,
 }
 
 struct Index {
@@ -199,13 +199,20 @@ impl Log {
             key: key.to_vec(),
             value: value.to_vec(),
         };
+        let errors = self.errors.clone();
         let completion_cb = self.completion_cb.clone();
         self.fs_thread.run(move |fs| {
-            let mut log = fs.open_append(&path)?;
-            let offset = log.seek(SeekFrom::End(0))?;
-            cmd.write(&mut log)?;
-            completion_cb(cmd, offset);
-            Ok(())
+            if let Err(e) = (|| -> Result<()> {
+                let mut log = fs.open_append(&path)?;
+                let offset = log.seek(SeekFrom::End(0))?;
+                cmd.write(&mut log)?;
+                completion_cb(cmd, offset);
+                Ok(())
+            })() {
+                let mut errors = errors.lock().expect("poison");
+                let mut errors = errors.entry(batch).or_default();
+                errors.push(e);
+            }
         });
     }
 
@@ -215,13 +222,20 @@ impl Log {
             batch,
             key: key.to_vec(),
         };
+        let errors = self.errors.clone();
         let completion_cb = self.completion_cb.clone();
         self.fs_thread.run(move |fs| {
-            let mut log = fs.open_append(&path)?;
-            let offset = log.seek(SeekFrom::End(0))?;
-            cmd.write(&mut log)?;
-            completion_cb(cmd, offset);
-            Ok(())
+            if let Err(e) = (|| -> Result<()> {
+                let mut log = fs.open_append(&path)?;
+                let offset = log.seek(SeekFrom::End(0))?;
+                cmd.write(&mut log)?;
+                completion_cb(cmd, offset);
+                Ok(())
+            })() {
+                let mut errors = errors.lock().expect("poison");
+                let mut errors = errors.entry(batch).or_default();
+                errors.push(e);
+            }
         });
     }
 
@@ -230,15 +244,31 @@ impl Log {
         let cmd = LogCommand::Commit {
             batch,
         };
+        let errors = self.errors.clone();
         let completion_cb = self.completion_cb.clone();
         self.fs_thread.run(move |fs| {
-            let mut log = fs.open_append(&path)?;
-            let offset = log.seek(SeekFrom::End(0))?;
-            cmd.write(&mut log)?;
-            log.flush()?;
-            completion_cb(cmd, offset);
-            Ok(())
-        }).await?;
+            if let Err(e) = (|| -> Result<()> {
+                let mut log = fs.open_append(&path)?;
+                let offset = log.seek(SeekFrom::End(0))?;
+                cmd.write(&mut log)?;
+                log.flush()?;
+                completion_cb(cmd, offset);
+                Ok(())
+            })() {
+                let mut errors = errors.lock().expect("poison");
+                let mut errors = errors.entry(batch).or_default();
+                errors.push(e);
+            }
+        });
+
+        let mut error_guard = self.errors.lock().expect("poison");
+        let mut errors = error_guard.remove(&batch).unwrap_or_default();
+
+        drop(error_guard);
+
+        for error in errors {
+            return Err(error);
+        }
 
         Ok(())
     }
