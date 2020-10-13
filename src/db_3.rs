@@ -257,7 +257,11 @@ impl Log {
         };
         let errors = self.errors.clone();
         let completion_cb = self.completion_cb.clone();
-        self.fs_thread.run(move |fs| {
+        let errors = self.fs_thread.run(move |fs| {
+            let mut error_guard = self.errors.lock().expect("poison");
+            let mut errors = error_guard.remove(&batch).unwrap_or_default();
+            drop(error_guard);
+
             if let Err(e) = (|| -> Result<()> {
                 let mut log = fs.open_append(&path)?;
                 let offset = log.seek(SeekFrom::End(0))?;
@@ -266,16 +270,11 @@ impl Log {
                 completion_cb(cmd, offset);
                 Ok(())
             })() {
-                let mut errors = errors.lock().expect("poison");
-                let mut errors = errors.entry(batch).or_default();
                 errors.push(e);
             }
-        });
 
-        let mut error_guard = self.errors.lock().expect("poison");
-        let mut errors = error_guard.remove(&batch).unwrap_or_default();
-
-        drop(error_guard);
+            errors
+        }).await;
 
         for error in errors {
             return Err(error);
