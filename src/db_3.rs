@@ -517,11 +517,39 @@ impl LogIndex {
 
 impl LogIndex {
     fn read_offset(&self, view: u64, key: &[u8]) -> Option<u64> {
-        panic!()
+        let view_commit = {
+            let mut map = self.view_commit_map.lock().expect("poison");
+            *map.get(&view).expect("view-commit")
+        };
+
+        let committed = self.committed.lock().expect("poison");
+        let entries = committed.get(key);
+
+        if let Some(entries) = entries {
+            for entry in entries.iter().rev() {
+                let batch = entry.0;
+                let batch_commit = {
+                    let batch_commit_map = self.batch_commit_map.lock().expect("poison");
+                    batch_commit_map.get(&batch).copied()
+                };
+                if let Some(batch_commit) = batch_commit {
+                    if batch_commit < view_commit {
+                        return match entry.1 {
+                            IndexEntry::Filled(offset) => Some(offset),
+                            IndexEntry::Deleted(_) => None,
+                        }
+                    }
+                }
+            }
+
+            None
+        } else {
+            None
+        }
     }
 
     fn close_view(&self, view: u64) {
-        panic!()
+        /* noop */
     }
 }
 
