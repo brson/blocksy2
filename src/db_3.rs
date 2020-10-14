@@ -386,8 +386,12 @@ impl LogFile {
     }
 
     fn abort_batch(&self, batch: u64) {
-        let mut error_guard = self.errors.lock().expect("poison");
-        let mut errors = error_guard.remove(&batch);
+        let errors = {
+            let mut errors = self.errors.lock().expect("poison");
+            errors.remove(&batch)
+        };
+
+        drop(errors);
     }
 }
 
@@ -472,7 +476,12 @@ impl LogIndex {
     }
 
     fn abort_batch(&self, batch: u64) {
-        panic!()
+        let uncommitted = {
+            let mut uncommitted = self.uncommitted.lock().expect("poison");
+            uncommitted.remove(&batch).unwrap_or_default()
+        };
+
+        drop(uncommitted);
     }
 }
 
