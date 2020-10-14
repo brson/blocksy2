@@ -57,7 +57,7 @@ struct LogIndex {
 
 enum IndexEntry {
     Filled(u64),
-    Deleted,
+    Deleted(u64),
 }
 
 struct CommitLog {
@@ -387,7 +387,7 @@ impl LogFile {
 
     fn abort_batch(&self, batch: u64) {
         let mut error_guard = self.errors.lock().expect("poison");
-        let mut errors = error_guard.remove(&batch).unwrap_or_default();
+        let mut errors = error_guard.remove(&batch);
     }
 }
 
@@ -432,19 +432,43 @@ impl LogIndex {
 
 impl LogIndex {
     fn write_offset(&self, batch: u64, key: &[u8], offset: u64) {
-        panic!()
+        let key = key.to_vec();
+        let new_entry = IndexEntry::Filled(offset);
+        let mut map = self.uncommitted.lock().expect("poison");
+        let mut entries = map.entry(batch).or_default();
+        entries.push((key, new_entry));
     }
 
     fn delete_offset(&self, batch: u64, key: &[u8], offset: u64) {
-        panic!()
+        let key = key.to_vec();
+        let new_entry = IndexEntry::Deleted(offset);
+        let mut map = self.uncommitted.lock().expect("poison");
+        let mut entries = map.entry(batch).or_default();
+        entries.push((key, new_entry));
     }
 
     fn pre_commit_batch(&self, batch: u64) {
-        panic!()
+        /* noop */
     }
 
     fn commit_batch(&self, batch: u64) {
-        panic!()
+        // Move index entries from uncommitted to committed. The caller will
+        // ensure that this is done in the order batches are committed. This
+        // will not have any effect on readers until the batch-commit map is
+        // updated.
+
+        let uncommitted = {
+            let mut uncommitted = self.uncommitted.lock().expect("poison");
+            uncommitted.remove(&batch).unwrap_or_default()
+        };
+
+        {
+            let mut committed = self.committed.lock().expect("poison");
+            for new in uncommitted {
+                let mut kvlist = committed.entry(new.0).or_default();
+                kvlist.push((batch, new.1));
+            }
+        }
     }
 
     fn abort_batch(&self, batch: u64) {
