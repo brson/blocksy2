@@ -52,28 +52,22 @@ impl FsThread {
     where F: FnOnce(&mut FsThreadContext) -> R + Send + 'static,
           R: Send + 'static,
     {
-        let (tx, rx) = async_channel::bounded(1);
+        let (rsp_tx, rsp_rx) = async_channel::bounded(1);
 
         let simple_f = move |ctx: &mut FsThreadContext| {
             let r = f(ctx);
-            tx.try_send(r).expect("send");
+            rsp_tx.try_send(r).expect("send");
         };
 
-        self.run_simple(simple_f).await;
+        self.tx.send(Message::Run(Box::new(simple_f))).await.expect("send");
 
-        let r = rx.recv().await.expect("recv");
+        let r = rsp_rx.recv().await.expect("recv");
 
         r
     }
 }
 
 impl FsThread {
-    async fn run_simple<F>(&self, f: F)
-    where F: FnOnce(&mut FsThreadContext) + Send + 'static
-    {
-        self.tx.send(Message::Run(Box::new(f))).await.expect("send");
-    }
-
     fn shutdown(&mut self) {
         panic!()
     }
