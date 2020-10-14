@@ -20,7 +20,7 @@ type BatchCommitMap = Arc<Mutex<BTreeMap<u64, u64>>>;
 type ViewCommitMap = Arc<Mutex<BTreeMap<u64, u64>>>;
 
 pub struct DbConfig {
-    pub path: PathBuf,
+    pub data_dir: PathBuf,
     pub trees: Vec<String>,
 }
 
@@ -83,14 +83,14 @@ impl Db {
         let mut stores = BTreeMap::new();
 
         for tree in &config.trees {
-            let path = paths::tree_path(&config.path, tree)?;
-            let store = Store::new(path, fs_thread.clone(),
+            let tree_path_stem = paths::tree_path_stem(&config.data_dir, tree)?;
+            let store = Store::new(tree_path_stem, fs_thread.clone(),
                                    batch_commit_map.clone(),
                                    view_commit_limit_map.clone()).await?;
             stores.insert(tree.clone(), store);
         }
 
-        let commit_log_path = paths::commit_log_path(&config.path)?;
+        let commit_log_path = paths::commit_log_path(&config.data_dir)?;
         let commit_log = CommitLog::new(commit_log_path, fs_thread.clone()).await?;
 
         return Ok(Db {
@@ -210,11 +210,11 @@ impl Db {
 }
 
 impl Store {
-    async fn new(path: PathBuf, fs_thread: Arc<FsThread>,
+    async fn new(tree_path_stem: PathBuf, fs_thread: Arc<FsThread>,
                  batch_commit_map: BatchCommitMap,
                  view_commit_limit_map: ViewCommitMap) -> Result<Store> {
 
-        let log_path = paths::log_path(&path)?;
+        let path = paths::log_path(&tree_path_stem)?;
         let log = Log::open(path, fs_thread,
                             batch_commit_map,
                             view_commit_limit_map).await?;
