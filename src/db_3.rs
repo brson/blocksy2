@@ -16,6 +16,9 @@ mod paths;
 use fs_thread::FsThread;
 use logcmd::LogCommand;
 
+type BatchCommitMap = Arc<Mutex<BTreeMap<u64, u64>>>;
+type ViewCommitMap = Arc<Mutex<BTreeMap<u64, u64>>>;
+
 pub struct DbConfig {
     pub path: PathBuf,
     pub trees: Vec<String>,
@@ -25,11 +28,12 @@ pub struct Db {
     config: DbConfig,
     stores: BTreeMap<String, Store>,
     next_batch: AtomicU64,
+    next_commit: AtomicU64,
     next_view: AtomicU64,
     commit_log: CommitLog,
-    next_commit: AtomicU64,
     commit_lock: Mutex<()>,
-    batch_commit_map: Arc<Mutex<BTreeMap<u64, u64>>>,
+    batch_commit_map: BatchCommitMap,
+    view_commit_map: ViewCommitMap,
 }
 
 struct Store {
@@ -53,6 +57,8 @@ struct LogFile {
 struct LogIndex {
     committed: Arc<Mutex<BTreeMap<Vec<u8>, Vec<(u64, IndexEntry)>>>>,
     uncommitted: Arc<Mutex<BTreeMap<u64, Vec<(Vec<u8>, IndexEntry)>>>>,
+    batch_commit_map: BatchCommitMap,
+    view_commit_map: ViewCommitMap,
 }
 
 enum IndexEntry {
@@ -71,12 +77,15 @@ impl Db {
         let fs_thread = Arc::new(fs_thread);
 
         let batch_commit_map = Arc::new(Mutex::new(BTreeMap::new()));
+        let view_commit_map = Arc::new(Mutex::new(BTreeMap::new()));
 
         let mut stores = BTreeMap::new();
 
         for tree in &config.trees {
             let path = paths::tree_path(&config.path, tree)?;
-            let store = Store::new(path, fs_thread.clone()).await?;
+            let store = Store::new(path, fs_thread.clone(),
+                                   batch_commit_map.clone(),
+                                   view_commit_map.clone()).await?;
             stores.insert(tree.clone(), store);
         }
 
@@ -92,6 +101,7 @@ impl Db {
             next_commit: AtomicU64::new(0),
             commit_lock: Mutex::new(()),
             batch_commit_map,
+            view_commit_map,
         });
     }
 }
@@ -158,9 +168,15 @@ impl Db {
 
 impl Db {
     pub fn new_view(&self) -> u64 {
-        let next = self.next_view.fetch_add(1, Ordering::Relaxed);
-        assert_ne!(next, u64::max_value());
-        next
+        let view = self.next_view.fetch_add(1, Ordering::Relaxed);
+        assert_ne!(view, u64::max_value());
+        let commit = self.next_commit.load(Ordering::Relaxed);
+        {
+            let mut map = self.view_commit_map.lock().expect("poison");
+            assert!(!map.contains_key(&view));
+            map.insert(view, commit);
+        }
+        view
     }
 
     pub async fn read(&self, tree: &str, view: u64, key: &[u8]) -> Result<Option<Vec<u8>>> {
@@ -172,14 +188,24 @@ impl Db {
         for store in self.stores.values() {
             store.close_view(view);
         }
+
+        {
+            let mut map = self.view_commit_map.lock().expect("poison");
+            let old = map.remove(&view);
+            assert!(old.is_some());
+        }
     }
 }
 
 impl Store {
-    async fn new(path: PathBuf, fs_thread: Arc<FsThread>) -> Result<Store> {
+    async fn new(path: PathBuf, fs_thread: Arc<FsThread>,
+                 batch_commit_map: BatchCommitMap,
+                 view_commit_map: ViewCommitMap) -> Result<Store> {
 
         let log_path = paths::log_path(&path)?;
-        let log = Log::open(path, fs_thread).await?;
+        let log = Log::open(path, fs_thread,
+                            batch_commit_map,
+                            view_commit_map).await?;
 
         return Ok(Store {
             log,
@@ -222,8 +248,10 @@ impl Store {
 }
 
 impl Log {
-    async fn open(path: PathBuf, fs_thread: Arc<FsThread>) -> Result<Log> {
-        let index = Arc::new(LogIndex::new());
+    async fn open(path: PathBuf, fs_thread: Arc<FsThread>,
+                  batch_commit_map: BatchCommitMap,
+                  view_commit_map: ViewCommitMap) -> Result<Log> {
+        let index = Arc::new(LogIndex::new(batch_commit_map, view_commit_map));
         let completion_index = index.clone();
         let log_completion_cb = Arc::new(move |cmd, offset| {
             match cmd {
@@ -426,10 +454,12 @@ impl LogFile {
 }
 
 impl LogIndex {
-    fn new() -> LogIndex {
+    fn new(batch_commit_map: BatchCommitMap, view_commit_map: ViewCommitMap) -> LogIndex {
         LogIndex {
             committed: Arc::new(Mutex::new(BTreeMap::new())),
             uncommitted: Arc::new(Mutex::new(BTreeMap::new())),
+            batch_commit_map,
+            view_commit_map,
         }
     }
 }
