@@ -30,10 +30,11 @@ pub struct Db {
     next_batch: AtomicU64,
     next_commit: AtomicU64,
     next_view: AtomicU64,
-    commit_log: CommitLog,
+    view_commit_limit: Arc<AtomicU64>,
     commit_lock: Mutex<()>,
+    commit_log: CommitLog,
     batch_commit_map: BatchCommitMap,
-    view_commit_map: ViewCommitMap,
+    view_commit_limit_map: ViewCommitMap,
 }
 
 struct Store {
@@ -58,7 +59,7 @@ struct LogIndex {
     committed: Arc<Mutex<BTreeMap<Vec<u8>, Vec<(u64, IndexEntry)>>>>,
     uncommitted: Arc<Mutex<BTreeMap<u64, Vec<(Vec<u8>, IndexEntry)>>>>,
     batch_commit_map: BatchCommitMap,
-    view_commit_map: ViewCommitMap,
+    view_commit_limit_map: ViewCommitMap,
 }
 
 enum IndexEntry {
@@ -77,7 +78,7 @@ impl Db {
         let fs_thread = Arc::new(fs_thread);
 
         let batch_commit_map = Arc::new(Mutex::new(BTreeMap::new()));
-        let view_commit_map = Arc::new(Mutex::new(BTreeMap::new()));
+        let view_commit_limit_map = Arc::new(Mutex::new(BTreeMap::new()));
 
         let mut stores = BTreeMap::new();
 
@@ -85,7 +86,7 @@ impl Db {
             let path = paths::tree_path(&config.path, tree)?;
             let store = Store::new(path, fs_thread.clone(),
                                    batch_commit_map.clone(),
-                                   view_commit_map.clone()).await?;
+                                   view_commit_limit_map.clone()).await?;
             stores.insert(tree.clone(), store);
         }
 
@@ -96,12 +97,13 @@ impl Db {
             config,
             stores,
             next_batch: AtomicU64::new(0),
-            next_view: AtomicU64::new(0),
-            commit_log,
             next_commit: AtomicU64::new(0),
+            next_view: AtomicU64::new(0),
+            view_commit_limit: Arc::new(AtomicU64::new(0)),
             commit_lock: Mutex::new(()),
+            commit_log,
             batch_commit_map,
-            view_commit_map,
+            view_commit_limit_map,
         });
     }
 }
@@ -135,26 +137,36 @@ impl Db {
 
         last_result?;
 
-        {
+        let future = {
             let _commit_guard = self.commit_lock.lock().expect("poison");
 
-            let commit = self.next_commit.load(Ordering::Relaxed);
+            let commit = self.next_commit.fetch_add(1, Ordering::Relaxed);
+            assert_ne!(commit, u64::max_value());
 
-            /// This step promotes all log index caches for the batch
-            /// from uncommitted to committed. It must be done under lock
-            /// so that the index keeps batches in commit order.
+            // This step promotes all log index caches for the batch
+            // from uncommitted to committed. It must be done under lock
+            // so that the index keeps batches in commit order.
             for store in self.stores.values() {
                 store.commit_batch(batch);
             }
 
-            let mut map = self.batch_commit_map.lock().expect("poison");
-            assert!(!map.contains_key(&batch));
-            map.insert(batch, commit);
-            drop(map);
+            // Write the final commit confirmation to disk at some point in the
+            // future, preserving the order of commits, then run a completion
+            // that publishes the commit to readers.
+            let batch_commit_map = self.batch_commit_map.clone();
+            let view_commit_limit = self.view_commit_limit.clone();
+            self.commit_log.commit_batch(batch, commit, move || {
+                let mut map = batch_commit_map.lock().expect("poison");
+                assert!(!map.contains_key(&batch));
+                map.insert(batch, commit);
+                drop(map);
 
-            let next_commit = commit.checked_add(1).expect("commit overflow");
-            self.next_commit.store(next_commit, Ordering::Relaxed);
-        }
+                let new_view_commit_limit = commit.checked_add(1).expect("view_commit_limit overflow");
+                view_commit_limit.store(new_view_commit_limit, Ordering::Relaxed);
+            })
+        };
+
+        future.await?;
 
         Ok(())
     }
@@ -170,9 +182,9 @@ impl Db {
     pub fn new_view(&self) -> u64 {
         let view = self.next_view.fetch_add(1, Ordering::Relaxed);
         assert_ne!(view, u64::max_value());
-        let commit = self.next_commit.load(Ordering::Relaxed);
+        let commit = self.view_commit_limit.load(Ordering::Relaxed);
         {
-            let mut map = self.view_commit_map.lock().expect("poison");
+            let mut map = self.view_commit_limit_map.lock().expect("poison");
             assert!(!map.contains_key(&view));
             map.insert(view, commit);
         }
@@ -190,7 +202,7 @@ impl Db {
         }
 
         {
-            let mut map = self.view_commit_map.lock().expect("poison");
+            let mut map = self.view_commit_limit_map.lock().expect("poison");
             let old = map.remove(&view);
             assert!(old.is_some());
         }
@@ -200,12 +212,12 @@ impl Db {
 impl Store {
     async fn new(path: PathBuf, fs_thread: Arc<FsThread>,
                  batch_commit_map: BatchCommitMap,
-                 view_commit_map: ViewCommitMap) -> Result<Store> {
+                 view_commit_limit_map: ViewCommitMap) -> Result<Store> {
 
         let log_path = paths::log_path(&path)?;
         let log = Log::open(path, fs_thread,
                             batch_commit_map,
-                            view_commit_map).await?;
+                            view_commit_limit_map).await?;
 
         return Ok(Store {
             log,
@@ -250,8 +262,8 @@ impl Store {
 impl Log {
     async fn open(path: PathBuf, fs_thread: Arc<FsThread>,
                   batch_commit_map: BatchCommitMap,
-                  view_commit_map: ViewCommitMap) -> Result<Log> {
-        let index = Arc::new(LogIndex::new(batch_commit_map, view_commit_map));
+                  view_commit_limit_map: ViewCommitMap) -> Result<Log> {
+        let index = Arc::new(LogIndex::new(batch_commit_map, view_commit_limit_map));
         let completion_index = index.clone();
         let log_completion_cb = Arc::new(move |cmd, offset| {
             match cmd {
@@ -454,12 +466,12 @@ impl LogFile {
 }
 
 impl LogIndex {
-    fn new(batch_commit_map: BatchCommitMap, view_commit_map: ViewCommitMap) -> LogIndex {
+    fn new(batch_commit_map: BatchCommitMap, view_commit_limit_map: ViewCommitMap) -> LogIndex {
         LogIndex {
             committed: Arc::new(Mutex::new(BTreeMap::new())),
             uncommitted: Arc::new(Mutex::new(BTreeMap::new())),
             batch_commit_map,
-            view_commit_map,
+            view_commit_limit_map,
         }
     }
 }
@@ -517,8 +529,8 @@ impl LogIndex {
 
 impl LogIndex {
     fn read_offset(&self, view: u64, key: &[u8]) -> Option<u64> {
-        let view_commit = {
-            let mut map = self.view_commit_map.lock().expect("poison");
+        let view_commit_limit = {
+            let mut map = self.view_commit_limit_map.lock().expect("poison");
             *map.get(&view).expect("view-commit")
         };
 
@@ -533,7 +545,7 @@ impl LogIndex {
                     batch_commit_map.get(&batch).copied()
                 };
                 if let Some(batch_commit) = batch_commit {
-                    if batch_commit < view_commit {
+                    if batch_commit < view_commit_limit {
                         return match entry.1 {
                             IndexEntry::Filled(offset) => Some(offset),
                             IndexEntry::Deleted(_) => None,
@@ -555,6 +567,15 @@ impl LogIndex {
 
 impl CommitLog {
     async fn new(path: PathBuf, fs_thread: Arc<FsThread>) -> Result<CommitLog> {
+        panic!()
+    }
+}
+
+impl CommitLog {
+    async fn commit_batch<F>(&self, batch: u64, commit: u64,
+                             completion_cb: F) -> Result<()>
+    where F: FnOnce()
+    {
         panic!()
     }
 }
