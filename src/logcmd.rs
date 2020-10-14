@@ -19,7 +19,7 @@ pub enum LogCommand {
 }
 
 impl LogCommand {
-    pub fn write<W>(&self, writer: &mut W) -> Result<()> where W: Write {
+    pub fn write<W>(&self, writer: &mut W) -> Result<u64> where W: Write {
         panic!()
     }
 
@@ -37,7 +37,7 @@ pub enum CommitLogCommand {
 }
 
 impl CommitLogCommand {
-    pub fn write<W>(&self, writer: &mut W) -> Result<()> where W: Write {
+    pub fn write<W>(&self, writer: &mut W) -> Result<u64> where W: Write {
         panic!()
     }
 

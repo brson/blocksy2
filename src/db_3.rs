@@ -357,8 +357,9 @@ impl LogFile {
         self.fs_thread.run(move |fs| {
             if let Err(e) = (|| -> Result<()> {
                 let mut log = fs.open_append(&path)?;
-                let offset = log.seek(SeekFrom::End(0))?;
-                cmd.write(&mut log)?;
+                let bytes = cmd.write(&mut log)?;
+                let offset = log.seek(SeekFrom::Current(0))?;
+                let offset = offset.checked_sub(bytes).expect("offset");
                 completion_cb(cmd, offset);
                 Ok(())
             })() {
@@ -380,8 +381,9 @@ impl LogFile {
         self.fs_thread.run(move |fs| {
             if let Err(e) = (|| -> Result<()> {
                 let mut log = fs.open_append(&path)?;
-                let offset = log.seek(SeekFrom::End(0))?;
-                cmd.write(&mut log)?;
+                let bytes = cmd.write(&mut log)?;
+                let offset = log.seek(SeekFrom::Current(0))?;
+                let offset = offset.checked_sub(bytes).expect("offset");
                 completion_cb(cmd, offset);
                 Ok(())
             })() {
@@ -406,8 +408,9 @@ impl LogFile {
 
             if let Err(e) = (|| -> Result<()> {
                 let mut log = fs.open_append(&path)?;
-                let offset = log.seek(SeekFrom::End(0))?;
-                cmd.write(&mut log)?;
+                let bytes = cmd.write(&mut log)?;
+                let offset = log.seek(SeekFrom::Current(0))?;
+                let offset = offset.checked_sub(bytes).expect("offset");
                 log.flush()?;
                 completion_cb(cmd, offset);
                 Ok(())

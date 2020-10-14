@@ -1,5 +1,6 @@
+use std::collections::BTreeMap;
 use std::future::Future;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::fs::File;
 use anyhow::Result;
 use std::thread::{self, JoinHandle};
@@ -11,11 +12,14 @@ pub struct FsThread {
     tx: Sender<Message>,
 }
 
-pub struct FsThreadContext;
+pub struct FsThreadContext {
+    append_handles: BTreeMap<PathBuf, File>,
+    read_handles: BTreeMap<PathBuf, File>,
+}
 
 enum Message {
     Run(Box<dyn FnOnce(&mut FsThreadContext) + Send>),
-    Shutdown,
+    Shutdown(Sender<()>),
 }
 
 impl Drop for FsThread {
@@ -28,15 +32,16 @@ impl FsThread {
     pub fn start() -> Result<FsThread> {
         let (tx, rx) = async_channel::bounded(16);
         let handle = thread::spawn(move || {
-            let mut context = FsThreadContext;
+            let mut context = FsThreadContext::new();
             loop {
                 let msg = block_on(rx.recv()).expect("recv");
                 match msg {
                     Message::Run(f) => {
                         f(&mut context);
                     },
-                    Message::Shutdown => {
+                    Message::Shutdown(rsp_tx) => {
                         context.shutdown();
+                        rsp_tx.try_send(()).expect("send");
                         break;
                     }
                 }
@@ -69,7 +74,9 @@ impl FsThread {
 
 impl FsThread {
     fn shutdown(&mut self) {
-        panic!()
+        let (rsp_tx, rsp_rx) = async_channel::bounded(1);
+        block_on(self.tx.send(Message::Shutdown(rsp_tx))).expect("send");
+        block_on(rsp_rx.recv()).expect("recv");
     }
 }
 
@@ -88,6 +95,13 @@ impl FsThreadContext {
 }
 
 impl FsThreadContext {
+    fn new() -> FsThreadContext {
+        FsThreadContext {
+            append_handles: BTreeMap::new(),
+            read_handles: BTreeMap::new(),
+        }
+    }
+
     fn shutdown(&mut self) {
         panic!()
     }
