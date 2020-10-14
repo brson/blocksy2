@@ -400,7 +400,7 @@ impl LogFile {
         let errors = self.errors.clone();
         let completion_cb = self.completion_cb.clone();
         let errors = self.fs_thread.run(move |fs| {
-            let mut error_guard = self.errors.lock().expect("poison");
+            let mut error_guard = errors.lock().expect("poison");
             let mut errors = error_guard.remove(&batch).unwrap_or_default();
             drop(error_guard);
 

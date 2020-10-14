@@ -2,10 +2,21 @@ use std::future::Future;
 use std::path::Path;
 use std::fs::File;
 use anyhow::Result;
+use std::thread::{self, JoinHandle};
+use async_channel::{self, Sender, Receiver};
+use futures::executor::block_on;
 
-pub struct FsThread;
+pub struct FsThread {
+    handle: JoinHandle<()>,
+    tx: Sender<Message>,
+}
 
 pub struct FsThreadContext;
+
+enum Message {
+    Run(Box<dyn FnOnce(&mut FsThreadContext) + Send>),
+    Shutdown,
+}
 
 impl Drop for FsThread {
     fn drop(&mut self) {
@@ -15,18 +26,54 @@ impl Drop for FsThread {
 
 impl FsThread {
     pub fn start() -> Result<FsThread> {
-        panic!()
+        let (tx, rx) = async_channel::bounded(16);
+        let handle = thread::spawn(move || {
+            let mut context = FsThreadContext;
+            loop {
+                let msg = block_on(rx.recv()).expect("recv");
+                match msg {
+                    Message::Run(f) => {
+                        f(&mut context);
+                    },
+                    Message::Shutdown => {
+                        context.shutdown();
+                        break;
+                    }
+                }
+            }
+        });
+
+        Ok(FsThread {
+            handle, tx
+        })
     }
 
-    pub fn run<F, R>(&self, f: F) -> Box<dyn Future<Output = R> + Unpin>
-    where F: FnOnce(&mut FsThreadContext) -> R + Send,
-          R: Send,
+    pub async fn run<F, R>(&self, f: F) -> R
+    where F: FnOnce(&mut FsThreadContext) -> R + Send + 'static,
+          R: Send + 'static,
     {
-        panic!()
+        let (tx, rx) = async_channel::bounded(1);
+
+        let simple_f = move |ctx: &mut FsThreadContext| {
+            let r = f(ctx);
+            tx.try_send(r).expect("send");
+        };
+
+        self.run_simple(simple_f).await;
+
+        let r = rx.recv().await.expect("recv");
+
+        r
     }
 }
 
 impl FsThread {
+    async fn run_simple<F>(&self, f: F)
+    where F: FnOnce(&mut FsThreadContext) + Send + 'static
+    {
+        self.tx.send(Message::Run(Box::new(f))).await.expect("send");
+    }
+
     fn shutdown(&mut self) {
         panic!()
     }
@@ -42,6 +89,12 @@ impl FsThreadContext {
     }
 
     pub fn close(&mut self, path: &Path) {
+        panic!()
+    }
+}
+
+impl FsThreadContext {
+    fn shutdown(&mut self) {
         panic!()
     }
 }
