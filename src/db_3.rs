@@ -4,7 +4,7 @@ use std::future::Future;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Mutex;
-use std::fs::File;
+use std::fs::{self, File};
 use std::path::{PathBuf, Path};
 use std::collections::BTreeMap;
 use anyhow::{Result, Error};
@@ -74,6 +74,9 @@ struct CommitLog {
 
 impl Db {
     pub async fn open(config: DbConfig) -> Result<Db> {
+
+        fs::create_dir_all(&config.data_dir)?;
+        
         let fs_thread = FsThread::start()?;
         let fs_thread = Arc::new(fs_thread);
 

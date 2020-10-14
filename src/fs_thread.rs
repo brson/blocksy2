@@ -6,8 +6,8 @@ use std::path::{Path, PathBuf};
 use std::fs::{File, OpenOptions};
 use anyhow::Result;
 use std::thread::{self, JoinHandle};
-use async_channel::{self, Sender, Receiver};
-use futures::executor::block_on;
+use async_channel::{self, Sender, Receiver, TrySendError};
+use futures::executor::{LocalPool, block_on};
 
 pub struct FsThread {
     handle: JoinHandle<()>,
@@ -76,9 +76,34 @@ impl FsThread {
 
 impl FsThread {
     fn shutdown(&mut self) {
-        let (rsp_tx, rsp_rx) = async_channel::bounded(1);
-        block_on(self.tx.send(Message::Shutdown(rsp_tx))).expect("send");
-        block_on(rsp_rx.recv()).expect("recv");
+        let (mut rsp_tx, rsp_rx) = async_channel::bounded(1);
+        loop {
+            let r = self.tx.try_send(Message::Shutdown(rsp_tx));
+            if let Err(e) = r {
+                match e {
+                    TrySendError::Full(Message::Shutdown(tx)) => {
+                        rsp_tx = tx;
+                    },
+                    TrySendError::Full(_) => {
+                        unreachable!();
+                    }
+                    TrySendError::Closed(_) => {
+                        panic!("shutdown channel closed");
+                        break;
+                    }
+                }
+            } else {
+                break;
+            }
+            thread::yield_now();
+        }
+        loop {
+            let r = rsp_rx.try_recv();
+            if r.is_ok() {
+                break;
+            }
+            thread::yield_now();
+        }
     }
 }
 
