@@ -1,6 +1,7 @@
 use anyhow::Result;
 use serde::{Serialize, Deserialize};
 use std::io::{Read, Write};
+use std::convert::TryInto;
 
 #[derive(Serialize, Deserialize)]
 pub enum LogCommand {
@@ -20,11 +21,13 @@ pub enum LogCommand {
 
 impl LogCommand {
     pub fn write<W>(&self, writer: &mut W) -> Result<u64> where W: Write {
-        panic!()
+        let buf = serde_json::to_string_pretty(self)?;
+        writer.write_all(buf.as_bytes())?;
+        Ok(buf.len().try_into().expect("u64"))
     }
 
     pub fn read<R>(reader: &mut R) -> Result<LogCommand> where R: Read {
-        panic!()
+        Ok(serde_json::from_reader(reader)?)
     }
 }
 
@@ -38,10 +41,12 @@ pub enum CommitLogCommand {
 
 impl CommitLogCommand {
     pub fn write<W>(&self, writer: &mut W) -> Result<u64> where W: Write {
-        panic!()
+        let buf = serde_json::to_string_pretty(self)?;
+        writer.write_all(buf.as_bytes())?;
+        Ok(buf.len().try_into().expect("u64"))
     }
 
     pub fn read<R>(reader: &mut R) -> Result<CommitLogCommand> where R: Read {
-        panic!()
+        Ok(serde_json::from_reader(reader)?)
     }
 }
