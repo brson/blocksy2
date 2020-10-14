@@ -24,9 +24,12 @@ pub struct DbConfig {
 pub struct Db {
     config: DbConfig,
     stores: BTreeMap<String, Store>,
-    commit_log: CommitLog,
     next_batch: AtomicU64,
     next_view: AtomicU64,
+    commit_log: CommitLog,
+    next_commit: AtomicU64,
+    commit_lock: Mutex<()>,
+    batch_commit_map: Arc<Mutex<BTreeMap<u64, u64>>>,
 }
 
 struct Store {
@@ -49,6 +52,7 @@ struct LogFile {
 
 struct LogIndex {
     committed: Arc<Mutex<BTreeMap<Vec<u8>, Vec<(u64, IndexEntry)>>>>,
+    uncommitted: Arc<Mutex<BTreeMap<u64, Vec<(Vec<u8>, IndexEntry)>>>>,
 }
 
 enum IndexEntry {
@@ -58,7 +62,6 @@ enum IndexEntry {
 
 struct CommitLog {
     path: Arc<PathBuf>,
-    next_commit: Arc<AtomicU64>,
     fs_thread: Arc<FsThread>,
 }
 
@@ -66,6 +69,9 @@ impl Db {
     pub async fn open(config: DbConfig) -> Result<Db> {
         let fs_thread = FsThread::start()?;
         let fs_thread = Arc::new(fs_thread);
+
+        let batch_commit_map = Arc::new(Mutex::new(BTreeMap::new()));
+
         let mut stores = BTreeMap::new();
 
         for tree in &config.trees {
@@ -80,9 +86,12 @@ impl Db {
         return Ok(Db {
             config,
             stores,
-            commit_log,
             next_batch: AtomicU64::new(0),
             next_view: AtomicU64::new(0),
+            commit_log,
+            next_commit: AtomicU64::new(0),
+            commit_lock: Mutex::new(()),
+            batch_commit_map,
         });
     }
 }
@@ -108,13 +117,34 @@ impl Db {
         let mut last_result = Ok(());
         for store in self.stores.values() {
             if last_result.is_ok() {
-                last_result = store.commit_batch(batch).await;
+                last_result = store.pre_commit_batch(batch).await;
             } else {
                 store.abort_batch(batch);
             }
         }
 
         last_result?;
+
+        {
+            let _commit_guard = self.commit_lock.lock().expect("poison");
+
+            let commit = self.next_commit.load(Ordering::Relaxed);
+
+            /// This step promotes all log index caches for the batch
+            /// from uncommitted to committed. It must be done under lock
+            /// so that the index keeps batches in commit order.
+            for store in self.stores.values() {
+                store.commit_batch(batch);
+            }
+
+            let mut map = self.batch_commit_map.lock().expect("poison");
+            assert!(!map.contains_key(&batch));
+            map.insert(batch, commit);
+            drop(map);
+
+            let next_commit = commit.checked_add(1).expect("commit overflow");
+            self.next_commit.store(next_commit, Ordering::Relaxed);
+        }
 
         Ok(())
     }
@@ -166,10 +196,14 @@ impl Store {
         self.log.delete(batch, key);
     }
 
-    async fn commit_batch(&self, batch: u64) -> Result<()> {
-        self.log.commit_batch(batch).await?;
+    async fn pre_commit_batch(&self, batch: u64) -> Result<()> {
+        self.log.pre_commit_batch(batch).await?;
 
         Ok(())
+    }
+
+    fn commit_batch(&self, batch: u64) {
+        self.log.commit_batch(batch);
     }
 
     fn abort_batch(&self, batch: u64) {
@@ -222,11 +256,15 @@ impl Log {
         self.file.delete(batch, key);
     }
 
-    async fn commit_batch(&self, batch: u64) -> Result<()> {
-        self.file.commit_batch(batch).await?;
-        self.index.commit_batch(batch);
+    async fn pre_commit_batch(&self, batch: u64) -> Result<()> {
+        self.file.pre_commit_batch(batch).await?;
+        self.index.pre_commit_batch(batch);
 
         Ok(())
+    }
+
+    fn commit_batch(&self, batch: u64) {
+        self.index.commit_batch(batch);
     }
 
     fn abort_batch(&self, batch: u64) {
@@ -314,7 +352,7 @@ impl LogFile {
         });
     }
 
-    async fn commit_batch(&self, batch: u64) -> Result<()> {
+    async fn pre_commit_batch(&self, batch: u64) -> Result<()> {
         let path = self.path.clone();
         let cmd = LogCommand::Commit {
             batch,
@@ -387,6 +425,7 @@ impl LogIndex {
     fn new() -> LogIndex {
         LogIndex {
             committed: Arc::new(Mutex::new(BTreeMap::new())),
+            uncommitted: Arc::new(Mutex::new(BTreeMap::new())),
         }
     }
 }
@@ -397,6 +436,10 @@ impl LogIndex {
     }
 
     fn delete_offset(&self, batch: u64, key: &[u8], offset: u64) {
+        panic!()
+    }
+
+    fn pre_commit_batch(&self, batch: u64) {
         panic!()
     }
 
