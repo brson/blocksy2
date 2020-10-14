@@ -8,6 +8,7 @@ use anyhow::Result;
 use std::thread::{self, JoinHandle};
 use async_channel::{self, Sender, Receiver, TrySendError};
 use futures::executor::{LocalPool, block_on};
+use std::sync::mpsc;
 
 pub struct FsThread {
     handle: JoinHandle<()>,
@@ -21,7 +22,7 @@ pub struct FsThreadContext {
 
 enum Message {
     Run(Box<dyn FnOnce(&mut FsThreadContext) + Send>),
-    Shutdown(Sender<()>),
+    Shutdown(mpsc::Sender<()>),
 }
 
 impl Drop for FsThread {
@@ -43,7 +44,7 @@ impl FsThread {
                     },
                     Message::Shutdown(rsp_tx) => {
                         context.shutdown();
-                        rsp_tx.try_send(()).expect("send");
+                        rsp_tx.send(()).expect("send");
                         break;
                     }
                 }
@@ -70,16 +71,14 @@ impl FsThread {
 
         async {
             let rsp_rx = rsp_rx;
-            let r = rsp_rx.recv().await.expect("recv");
-
-            r
+            rsp_rx.recv().await.expect("recv")
         }
     }
 }
 
 impl FsThread {
     fn shutdown(&mut self) {
-        let (mut rsp_tx, rsp_rx) = async_channel::bounded(1);
+        let (mut rsp_tx, rsp_rx) = mpsc::channel();
         loop {
             let r = self.tx.try_send(Message::Shutdown(rsp_tx));
             if let Err(e) = r {
@@ -100,13 +99,7 @@ impl FsThread {
             }
             thread::yield_now();
         }
-        loop {
-            let r = rsp_rx.try_recv();
-            if r.is_ok() {
-                break;
-            }
-            thread::yield_now();
-        }
+        rsp_rx.recv().expect("recv");
     }
 }
 
