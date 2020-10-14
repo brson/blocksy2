@@ -27,3 +27,21 @@ impl LogCommand {
         panic!()
     }
 }
+
+#[derive(Serialize, Deserialize)]
+pub enum CommitLogCommand {
+    Commit {
+        commit: u64,
+        batch: u64,
+    }
+}
+
+impl CommitLogCommand {
+    pub fn write<W>(&self, writer: &mut W) -> Result<()> where W: Write {
+        panic!()
+    }
+
+    pub fn read<R>(reader: &mut R) -> Result<CommitLogCommand> where R: Read {
+        panic!()
+    }
+}

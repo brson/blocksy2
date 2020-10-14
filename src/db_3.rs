@@ -14,7 +14,7 @@ mod logcmd;
 mod paths;
 
 use fs_thread::FsThread;
-use logcmd::LogCommand;
+use logcmd::{LogCommand, CommitLogCommand};
 
 type BatchCommitMap = Arc<Mutex<BTreeMap<u64, u64>>>;
 type ViewCommitMap = Arc<Mutex<BTreeMap<u64, u64>>>;
@@ -567,15 +567,32 @@ impl LogIndex {
 
 impl CommitLog {
     async fn new(path: PathBuf, fs_thread: Arc<FsThread>) -> Result<CommitLog> {
-        panic!()
+        Ok(CommitLog {
+            path: Arc::new(path),
+            fs_thread,
+        })
     }
 }
 
 impl CommitLog {
     async fn commit_batch<F>(&self, batch: u64, commit: u64,
                              completion_cb: F) -> Result<()>
-    where F: FnOnce()
+    where F: FnOnce() + Send + 'static
     {
-        panic!()
+        let path = self.path.clone();
+        let cmd = CommitLogCommand::Commit {
+            commit, batch,
+        };
+        let future = self.fs_thread.run(move |fs| -> Result<()> {
+            let mut log = fs.open_append(&path)?;
+            cmd.write(&mut log)?;
+            completion_cb();
+
+            Ok(())
+        });
+
+        future.await?;
+
+        Ok(())
     }
 }
