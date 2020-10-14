@@ -1,5 +1,6 @@
-use anyhow::Result;
+use anyhow::{Result, bail};
 use serde::{Serialize, Deserialize};
+use serde_json::Deserializer;
 use std::io::{Read, Write};
 use std::convert::TryInto;
 
@@ -28,7 +29,13 @@ impl LogCommand {
     }
 
     pub fn read<R>(reader: &mut R) -> Result<LogCommand> where R: Read {
-        Ok(serde_json::from_reader(reader)?)
+        let de = Deserializer::from_reader(reader).into_iter();
+        for value in de {
+            let value = value?;
+            return Ok(value);
+        }
+
+        bail!("no command in stream");
     }
 }
 
@@ -48,6 +55,12 @@ impl CommitLogCommand {
     }
 
     pub fn read<R>(reader: &mut R) -> Result<CommitLogCommand> where R: Read {
-        Ok(serde_json::from_reader(reader)?)
+        let de = Deserializer::from_reader(reader).into_iter();
+        for value in de {
+            let value = value?;
+            return Ok(value);
+        }
+
+        bail!("no command in stream");
     }
 }

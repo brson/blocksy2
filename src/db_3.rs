@@ -360,6 +360,7 @@ impl LogFile {
         self.fs_thread.run(move |fs| {
             if let Err(e) = (|| -> Result<()> {
                 let mut log = fs.open_append(&path)?;
+                let offset = log.seek(SeekFrom::Current(0))?;
                 let bytes = cmd.write(&mut log)?;
                 let offset = log.seek(SeekFrom::Current(0))?;
                 let offset = offset.checked_sub(bytes).expect("offset");

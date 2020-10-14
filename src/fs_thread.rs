@@ -128,11 +128,12 @@ impl FsThreadContext {
     }
 
     pub fn open_read(&mut self, path: &Path) -> Result<&mut File> {
-        let mut entry = self.append_handles.entry(path.to_owned());
+        let mut entry = self.read_handles.entry(path.to_owned());
         match entry {
             Entry::Vacant(mut entry) => {
                 let file = OpenOptions::new()
                     .create(true)
+                    .write(true)
                     .read(true)
                     .open(path)?;
                 Ok(entry.insert(file))
