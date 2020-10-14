@@ -32,7 +32,7 @@ impl Drop for FsThread {
 
 impl FsThread {
     pub fn start() -> Result<FsThread> {
-        let (tx, rx) = async_channel::bounded(16);
+        let (tx, rx) = async_channel::unbounded();
         let handle = thread::spawn(move || {
             let mut context = FsThreadContext::new();
             loop {
@@ -55,7 +55,7 @@ impl FsThread {
         })
     }
 
-    pub async fn run<F, R>(&self, f: F) -> R
+    pub fn run<F, R>(&self, f: F) -> impl Future<Output = R>
     where F: FnOnce(&mut FsThreadContext) -> R + Send + 'static,
           R: Send + 'static,
     {
@@ -63,14 +63,17 @@ impl FsThread {
 
         let simple_f = move |ctx: &mut FsThreadContext| {
             let r = f(ctx);
-            rsp_tx.try_send(r).expect("send");
+            let _r = rsp_tx.try_send(r);
         };
 
-        self.tx.send(Message::Run(Box::new(simple_f))).await.expect("send");
+        self.tx.try_send(Message::Run(Box::new(simple_f))).expect("send");
 
-        let r = rsp_rx.recv().await.expect("recv");
+        async {
+            let rsp_rx = rsp_rx;
+            let r = rsp_rx.recv().await.expect("recv");
 
-        r
+            r
+        }
     }
 }
 
