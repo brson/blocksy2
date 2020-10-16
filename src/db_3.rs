@@ -104,9 +104,9 @@ impl Db {
 
         for tree in &config.trees {
             let tree_path_stem = paths::tree_path_stem(&config.data_dir, tree)?;
-            let store = Store::new(tree_path_stem, fs_thread.clone(),
-                                   batch_commit_map.clone(),
-                                   view_commit_limit_map.clone()).await?;
+            let store = Store::open(tree_path_stem, fs_thread.clone(),
+                                    batch_commit_map.clone(),
+                                    view_commit_limit_map.clone()).await?;
             stores.insert(tree.clone(), store);
         }
 
@@ -245,9 +245,9 @@ impl Db {
 }
 
 impl Store {
-    async fn new(tree_path_stem: PathBuf, fs_thread: Arc<FsThread>,
-                 batch_commit_map: BatchCommitMap,
-                 view_commit_limit_map: ViewCommitMap) -> Result<Store> {
+    async fn open(tree_path_stem: PathBuf, fs_thread: Arc<FsThread>,
+                  batch_commit_map: BatchCommitMap,
+                  view_commit_limit_map: ViewCommitMap) -> Result<Store> {
 
         let path = paths::log_path(&tree_path_stem)?;
         let log = Log::open(path, fs_thread,
@@ -368,6 +368,31 @@ impl LogFile {
     async fn open(path: PathBuf, fs_thread: Arc<FsThread>,
                   completion_cb: LogCompletionCallback) -> Result<LogFile> {
         let path = Arc::new(path);
+
+        let path_clone = path.clone();
+        let completion_cb_clone = completion_cb.clone();
+        fs_thread.run(move |fs| -> Result<()> {
+            let path = path_clone;
+            let completion_cb = completion_cb_clone;
+
+            let mut log = fs.open_read(&path)?;
+            let end = log.seek(SeekFrom::End(0))?;
+
+            log.seek(SeekFrom::Start(0))?;
+
+            loop {
+                let offset = log.seek(SeekFrom::Current(0))?;
+                if offset == end {
+                    break;
+                }
+
+                let cmd = LogCommand::read(&mut log)?;
+                completion_cb(cmd, Offset(offset));
+            }
+
+            Ok(())
+        }).await?;
+
         let errors = Arc::new(Mutex::new(BTreeMap::new()));
 
         Ok(LogFile {
@@ -638,7 +663,7 @@ impl CommitLog {
             }
 
             Ok(())
-        }).await;
+        }).await?;
 
         let commit_log = CommitLog {
             path,
@@ -659,15 +684,13 @@ impl CommitLog {
             commit: commit.0,
             batch: batch.0,
         };
-        let future = self.fs_thread.run(move |fs| -> Result<()> {
+        self.fs_thread.run(move |fs| -> Result<()> {
             let mut log = fs.open_append(&path)?;
             cmd.write(&mut log)?;
             completion_cb();
 
             Ok(())
-        });
-
-        future.await?;
+        }).await?;
 
         Ok(())
     }
