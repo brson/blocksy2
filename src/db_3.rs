@@ -108,7 +108,7 @@ impl Db {
         }
 
         let commit_log_path = paths::commit_log_path(&config.data_dir)?;
-        let commit_log = CommitLog::new(commit_log_path, fs_thread.clone()).await?;
+        let commit_log = CommitLog::open(commit_log_path, fs_thread.clone()).await?;
 
         return Ok(Db {
             config,
@@ -590,7 +590,7 @@ impl LogIndex {
 }
 
 impl CommitLog {
-    async fn new(path: PathBuf, fs_thread: Arc<FsThread>) -> Result<CommitLog> {
+    async fn open(path: PathBuf, fs_thread: Arc<FsThread>) -> Result<CommitLog> {
         Ok(CommitLog {
             path: Arc::new(path),
             fs_thread,
