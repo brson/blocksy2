@@ -12,13 +12,13 @@ pub struct Db(Arc<imp::Db>);
 
 pub struct WriteBatch {
     db: Arc<imp::Db>,
-    batch: u64,
+    batch: imp::Batch,
     destructed: bool,
 }
 
 pub struct ReadView {
     db: Arc<imp::Db>,
-    view: u64,
+    view: imp::View,
 }
 
 pub struct WriteTree<'batch> {
