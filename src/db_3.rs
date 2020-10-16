@@ -94,7 +94,10 @@ impl Db {
         let fs_thread = FsThread::start()?;
         let fs_thread = Arc::new(fs_thread);
 
-        let batch_commit_map = Arc::new(Mutex::new(BTreeMap::new()));
+        let commit_log_path = paths::commit_log_path(&config.data_dir)?;
+        let (commit_log, batch_commit_map) =
+            CommitLog::open(commit_log_path, fs_thread.clone()).await?;
+
         let view_commit_limit_map = Arc::new(Mutex::new(BTreeMap::new()));
 
         let mut stores = BTreeMap::new();
@@ -106,9 +109,6 @@ impl Db {
                                    view_commit_limit_map.clone()).await?;
             stores.insert(tree.clone(), store);
         }
-
-        let commit_log_path = paths::commit_log_path(&config.data_dir)?;
-        let commit_log = CommitLog::open(commit_log_path, fs_thread.clone()).await?;
 
         return Ok(Db {
             config,
@@ -590,11 +590,15 @@ impl LogIndex {
 }
 
 impl CommitLog {
-    async fn open(path: PathBuf, fs_thread: Arc<FsThread>) -> Result<CommitLog> {
-        Ok(CommitLog {
+    async fn open(path: PathBuf, fs_thread: Arc<FsThread>) -> Result<(CommitLog, BatchCommitMap)> {
+        let batch_commit_map = Arc::new(Mutex::new(BTreeMap::new()));
+
+        let commit_log = CommitLog {
             path: Arc::new(path),
             fs_thread,
-        })
+        };
+
+        Ok((commit_log, batch_commit_map))
     }
 }
 
