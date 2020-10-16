@@ -110,14 +110,29 @@ impl Db {
             stores.insert(tree.clone(), store);
         }
 
+        let next_batch = 0;
+        let next_commit = batch_commit_map
+            .lock().expect("poison")
+            .values().max()
+            .map(|c| c.0.checked_add(1).expect("overflow")).unwrap_or(0);
+        let next_view = 0;
+        let view_commit_limit = next_commit;
+
+        let next_batch = AtomicU64::new(next_batch);
+        let next_commit = AtomicU64::new(next_commit);
+        let next_view = AtomicU64::new(next_view);
+        let view_commit_limit = Arc::new(AtomicU64::new(view_commit_limit));
+
+        let commit_lock = Mutex::new(());
+
         return Ok(Db {
             config,
             stores,
-            next_batch: AtomicU64::new(0),
-            next_commit: AtomicU64::new(0),
-            next_view: AtomicU64::new(0),
-            view_commit_limit: Arc::new(AtomicU64::new(0)),
-            commit_lock: Mutex::new(()),
+            next_batch,
+            next_commit,
+            next_view,
+            view_commit_limit,
+            commit_lock,
             commit_log,
             batch_commit_map,
             view_commit_limit_map,
@@ -591,10 +606,42 @@ impl LogIndex {
 
 impl CommitLog {
     async fn open(path: PathBuf, fs_thread: Arc<FsThread>) -> Result<(CommitLog, BatchCommitMap)> {
+        let path = Arc::new(path);
         let batch_commit_map = Arc::new(Mutex::new(BTreeMap::new()));
 
+        let path_clone = path.clone();
+        let batch_commit_map_clone = batch_commit_map.clone();
+        fs_thread.run(move |fs| -> Result<()> {
+            let path = path_clone;
+            let batch_commit_map = batch_commit_map_clone;
+
+            let mut batch_commit_map = batch_commit_map.lock().expect("poison");
+
+            let mut log = fs.open_read(&path)?;
+            let end = log.seek(SeekFrom::End(0))?;
+
+            log.seek(SeekFrom::Start(0))?;
+
+            loop {
+                let offset = log.seek(SeekFrom::Current(0))?;
+                if offset == end {
+                    break;
+                }
+                
+                let cmd = CommitLogCommand::read(&mut log)?;
+                match cmd {
+                    CommitLogCommand::Commit { commit, batch } => {
+                        assert!(!batch_commit_map.contains_key(&Batch(batch)));
+                        batch_commit_map.insert(Batch(batch), Commit(commit));
+                    }
+                }
+            }
+
+            Ok(())
+        }).await;
+
         let commit_log = CommitLog {
-            path: Arc::new(path),
+            path,
             fs_thread,
         };
 

@@ -23,7 +23,6 @@ pub enum LogCommand {
 impl LogCommand {
     pub fn write<W>(&self, writer: &mut W) -> Result<u64> where W: Write {
         let mut buf = serde_json::to_string_pretty(self)?;
-        buf.push('\n');
         writer.write_all(buf.as_bytes())?;
         Ok(buf.len().try_into().expect("u64"))
     }
