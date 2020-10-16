@@ -247,10 +247,6 @@ impl Db {
     }
 
     pub fn close_view(&self, view: View) {
-        for store in self.stores.values() {
-            store.close_view(view);
-        }
-
         {
             let mut map = self.view_commit_limit_map.lock().expect("poison");
             let old = map.remove(&view);
@@ -305,10 +301,6 @@ impl Store {
     async fn read(&self, view: View, key: &[u8]) -> Result<Option<Vec<u8>>> {
         Ok(self.log.read(view, key).await?)
     }
-
-    fn close_view(&self, view: View) {
-        self.log.close_view(view)
-    }
 }
 
 impl Log {
@@ -354,7 +346,6 @@ impl Log {
 
     async fn pre_commit_batch(&self, batch: Batch) -> Result<()> {
         self.file.pre_commit_batch(batch).await?;
-        self.index.pre_commit_batch(batch);
 
         Ok(())
     }
@@ -377,11 +368,6 @@ impl Log {
         } else {
             Ok(None)
         }
-    }
-
-    fn close_view(&self, view: View) {
-        self.index.close_view(view);
-        self.file.close_view(view);
     }
 }
 
@@ -561,10 +547,6 @@ impl LogFile {
 
         Ok(entry)
     }
-
-    fn close_view(&self, view: View) {
-        /* noop */
-    }
 }
 
 impl LogIndex {
@@ -593,10 +575,6 @@ impl LogIndex {
         let mut map = self.uncommitted.lock().expect("poison");
         let mut entries = map.entry(batch).or_default();
         entries.push((key, new_entry));
-    }
-
-    fn pre_commit_batch(&self, batch: Batch) {
-        /* noop */
     }
 
     fn commit_batch(&self, batch: Batch) {
@@ -660,10 +638,6 @@ impl LogIndex {
         } else {
             None
         }
-    }
-
-    fn close_view(&self, view: View) {
-        /* noop */
     }
 }
 
