@@ -107,20 +107,29 @@ impl Db {
 
         let mut stores = BTreeMap::new();
 
+        let mut max_batch = None;
+
         for tree in &config.trees {
             let tree_path_stem = paths::tree_path_stem(&config.data_dir, tree)?;
-            let store = Store::open(tree_path_stem, fs_thread.clone(),
-                                    batch_commit_map.clone(),
-                                    &commit_batch_map,
-                                    view_commit_limit_map.clone()).await?;
+            let (store, store_max_batch) =
+                Store::open(tree_path_stem, fs_thread.clone(),
+                            batch_commit_map.clone(),
+                            &commit_batch_map,
+                            view_commit_limit_map.clone()).await?;
+            if let Some(store_max_batch) = store_max_batch {
+                max_batch = Some(u64::max(max_batch.unwrap_or(0), store_max_batch.0));
+            }
             stores.insert(tree.clone(), store);
         }
 
-        let next_batch = 0;
+        let next_batch = max_batch
+            .map(|b| b.checked_add(1).expect("overflow"))
+            .unwrap_or(0);
         let next_commit = batch_commit_map
             .lock().expect("poison")
             .values().max()
-            .map(|c| c.0.checked_add(1).expect("overflow")).unwrap_or(0);
+            .map(|c| c.0.checked_add(1).expect("overflow"))
+            .unwrap_or(0);
         let next_view = 0;
         let view_commit_limit = next_commit;
 
@@ -254,17 +263,17 @@ impl Store {
     async fn open(tree_path_stem: PathBuf, fs_thread: Arc<FsThread>,
                   batch_commit_map: BatchCommitMap,
                   commit_batch_map: &BTreeMap<Commit, Batch>,
-                  view_commit_limit_map: ViewCommitMap) -> Result<Store> {
+                  view_commit_limit_map: ViewCommitMap) -> Result<(Store, Option<Batch>)> {
 
         let path = paths::log_path(&tree_path_stem)?;
-        let log = Log::open(path, fs_thread,
-                            batch_commit_map,
-                            commit_batch_map,
-                            view_commit_limit_map).await?;
+        let (log, max_batch) = Log::open(path, fs_thread,
+                                         batch_commit_map,
+                                         commit_batch_map,
+                                         view_commit_limit_map).await?;
 
-        return Ok(Store {
-            log,
-        });
+        let store = Store { log };
+
+        Ok((store, max_batch))
     }
 }
 
@@ -306,7 +315,7 @@ impl Log {
     async fn open(path: PathBuf, fs_thread: Arc<FsThread>,
                   batch_commit_map: BatchCommitMap,
                   commit_batch_map: &BTreeMap<Commit, Batch>,
-                  view_commit_limit_map: ViewCommitMap) -> Result<Log> {
+                  view_commit_limit_map: ViewCommitMap) -> Result<(Log, Option<Batch>)> {
         let index = Arc::new(LogIndex::new(batch_commit_map, view_commit_limit_map));
         let completion_index = index.clone();
         let log_completion_cb = Arc::new(move |cmd, offset| {
@@ -322,16 +331,15 @@ impl Log {
                 }
             }
         });
-        let file = LogFile::open(path, fs_thread, log_completion_cb).await?;
+        let (file, max_batch) = LogFile::open(path, fs_thread, log_completion_cb).await?;
 
         for batch in commit_batch_map.values() {
             index.commit_batch(*batch);
         }
 
-        Ok(Log {
-            file,
-            index,
-        })
+        let log = Log { file, index };
+
+        Ok((log, max_batch))
     }
 }
 
@@ -379,12 +387,12 @@ impl Log {
 
 impl LogFile {
     async fn open(path: PathBuf, fs_thread: Arc<FsThread>,
-                  completion_cb: LogCompletionCallback) -> Result<LogFile> {
+                  completion_cb: LogCompletionCallback) -> Result<(LogFile, Option<Batch>)> {
         let path = Arc::new(path);
 
         let path_clone = path.clone();
         let completion_cb_clone = completion_cb.clone();
-        fs_thread.run(move |fs| -> Result<()> {
+        let max_batch = fs_thread.run(move |fs| -> Result<Option<Batch>> {
             let path = path_clone;
             let completion_cb = completion_cb_clone;
 
@@ -393,6 +401,8 @@ impl LogFile {
 
             log.seek(SeekFrom::Start(0))?;
 
+            let mut max_batch = None;
+
             loop {
                 let offset = log.seek(SeekFrom::Current(0))?;
                 if offset == end {
@@ -400,20 +410,35 @@ impl LogFile {
                 }
 
                 let cmd = LogCommand::read(&mut log)?;
+
+                let batch = match &cmd {
+                    LogCommand::Write { batch, .. } |
+                    LogCommand::Delete { batch, .. } |
+                    LogCommand::Commit { batch } => {
+                        if let Some(max_batch_) = max_batch {
+                            max_batch = Some(u64::max(max_batch_, *batch));
+                        } else {
+                            max_batch = Some(*batch);
+                        }
+                    }                    
+                };
+
                 completion_cb(cmd, Offset(offset));
             }
 
-            Ok(())
+            Ok(max_batch.map(Batch))
         }).await?;
 
         let errors = Arc::new(Mutex::new(BTreeMap::new()));
 
-        Ok(LogFile {
+        let file = LogFile {
             path,
             fs_thread,
             completion_cb,
             errors,
-        })
+        };
+
+        Ok((file, max_batch))
     }
 }
 
