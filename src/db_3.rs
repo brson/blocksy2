@@ -247,11 +247,9 @@ impl Db {
     }
 
     pub fn close_view(&self, view: View) {
-        {
-            let mut map = self.view_commit_limit_map.lock().expect("poison");
-            let old = map.remove(&view);
-            assert!(old.is_some());
-        }
+        let mut map = self.view_commit_limit_map.lock().expect("poison");
+        let old = map.remove(&view);
+        assert!(old.is_some());
     }
 }
 
