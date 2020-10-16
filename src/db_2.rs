@@ -31,6 +31,8 @@ pub struct ReadTree<'view> {
     tree: String,
 }
 
+pub struct Cursor;
+
 impl Db {
     pub async fn open(config: DbConfig) -> Result<Db> {
         imp::Db::open(config).await.map(Arc::new).map(Db)
@@ -106,5 +108,39 @@ impl<'batch> WriteTree<'batch> {
 impl<'view> ReadTree<'view> {
     pub async fn read(&self, key: &[u8]) -> Result<Option<Vec<u8>>> {
         Ok(self.view.db.read(&self.tree, self.view.view, key).await?)
+    }
+
+    pub fn cursor(&self) -> Cursor {
+        panic!()
+    }
+}
+
+impl Cursor {
+    pub fn valid(&self) -> bool {
+        panic!()
+    }
+
+    pub fn next(&self) -> Result<()> {
+        panic!()
+    }
+
+    pub fn prev(&self) -> Result<()> {
+        panic!()
+    }
+
+    pub fn key_value(&self) -> (&[u8], &[u8]) {
+        panic!()
+    }
+
+    pub fn seek_first(&self) -> Result<()> {
+        panic!()
+    }
+
+    pub fn seek_last(&self) -> Result<()> {
+        panic!()
+    }
+
+    pub fn seek_key(&self, key: &[u8]) -> Result<()> {
+        panic!()
     }
 }

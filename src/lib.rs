@@ -15,6 +15,8 @@ pub struct ReadView(imp::ReadView);
 pub struct WriteTree<'batch>(imp::WriteTree<'batch>);
 pub struct ReadTree<'view>(imp::ReadTree<'view>);
 
+pub struct Cursor(imp::Cursor);
+
 impl Db {
     pub async fn open(config: DbConfig) -> Result<Db> { imp::Db::open(config).await.map(Db) }
     pub fn write_batch(&self) -> WriteBatch { WriteBatch(self.0.write_batch()) }
@@ -38,4 +40,15 @@ impl<'batch> WriteTree<'batch> {
 
 impl<'view> ReadTree<'view> {
     pub async fn read(&self, key: &[u8]) -> Result<Option<Vec<u8>>> { self.0.read(key).await }
+    pub fn cursor(&self) -> Cursor { Cursor(self.0.cursor()) }
+}
+
+impl Cursor {
+    pub fn valid(&self) -> bool { self.0.valid() }
+    pub fn next(&self) -> Result<()> { self.0.next() }
+    pub fn prev(&self) -> Result<()> { self.0.prev() }
+    pub fn key_value(&self) -> (&[u8], &[u8]) { self.0.key_value() }
+    pub fn seek_first(&self) -> Result<()> { self.0.seek_first() }
+    pub fn seek_last(&self) -> Result<()> { self.0.seek_last() }
+    pub fn seek_key(&self, key: &[u8]) -> Result<()> { self.0.seek_key(key) }
 }
