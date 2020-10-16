@@ -98,6 +98,11 @@ impl Db {
         let (commit_log, batch_commit_map) =
             CommitLog::open(commit_log_path, fs_thread.clone()).await?;
 
+        let commit_batch_map: BTreeMap<Commit, Batch> = batch_commit_map
+            .lock().expect("poison")
+            .iter().map(|(batch, commit)| (*commit, *batch))
+            .collect();
+
         let view_commit_limit_map = Arc::new(Mutex::new(BTreeMap::new()));
 
         let mut stores = BTreeMap::new();
@@ -106,6 +111,7 @@ impl Db {
             let tree_path_stem = paths::tree_path_stem(&config.data_dir, tree)?;
             let store = Store::open(tree_path_stem, fs_thread.clone(),
                                     batch_commit_map.clone(),
+                                    &commit_batch_map,
                                     view_commit_limit_map.clone()).await?;
             stores.insert(tree.clone(), store);
         }
@@ -247,11 +253,13 @@ impl Db {
 impl Store {
     async fn open(tree_path_stem: PathBuf, fs_thread: Arc<FsThread>,
                   batch_commit_map: BatchCommitMap,
+                  commit_batch_map: &BTreeMap<Commit, Batch>,
                   view_commit_limit_map: ViewCommitMap) -> Result<Store> {
 
         let path = paths::log_path(&tree_path_stem)?;
         let log = Log::open(path, fs_thread,
                             batch_commit_map,
+                            commit_batch_map,
                             view_commit_limit_map).await?;
 
         return Ok(Store {
@@ -297,6 +305,7 @@ impl Store {
 impl Log {
     async fn open(path: PathBuf, fs_thread: Arc<FsThread>,
                   batch_commit_map: BatchCommitMap,
+                  commit_batch_map: &BTreeMap<Commit, Batch>,
                   view_commit_limit_map: ViewCommitMap) -> Result<Log> {
         let index = Arc::new(LogIndex::new(batch_commit_map, view_commit_limit_map));
         let completion_index = index.clone();
@@ -314,6 +323,10 @@ impl Log {
             }
         });
         let file = LogFile::open(path, fs_thread, log_completion_cb).await?;
+
+        for batch in commit_batch_map.values() {
+            index.commit_batch(*batch);
+        }
 
         Ok(Log {
             file,
