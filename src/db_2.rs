@@ -141,35 +141,52 @@ impl Cursor {
     pub async fn next(&mut self) -> Result<()> {
         self.value = None;
         self.cursor.next();
-        panic!()
+        self.load().await?;
+        Ok(())
     }
 
     pub async fn prev(&mut self) -> Result<()> {
         self.value = None;
         self.cursor.prev();
-        panic!()
+        self.load().await?;
+        Ok(())
     }
 
     pub fn key_value(&self) -> (&[u8], &[u8]) {
-        panic!()
+        let key = self.cursor.key();
+        let value = self.value.as_ref().expect("valid");
+        (key, value)
     }
 
     pub async fn seek_first(&mut self) -> Result<()> {
         self.value = None;
         self.cursor.seek_first();
-        panic!()
+        self.load().await?;
+        Ok(())
     }
 
     pub async fn seek_last(&mut self) -> Result<()> {
         self.value = None;
         self.cursor.seek_last();
-        panic!()
+        self.load().await?;
+        Ok(())
     }
 
     pub async fn seek_key(&mut self, key: &[u8]) -> Result<()> {
         self.value = None;
         self.cursor.seek_key(key);
-        panic!()
+        self.load().await?;
+        Ok(())
+    }
+}
+
+impl Cursor {
+    async fn load(&mut self) -> Result<()> {
+        if self.cursor.valid() {
+            let value = self.db.read(&self.tree, self.view, self.cursor.key()).await?;
+            self.value = Some(value.expect("value"));
+        }
+        Ok(())
     }
 }
 
