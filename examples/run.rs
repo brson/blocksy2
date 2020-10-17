@@ -1,3 +1,4 @@
+use std::fs;
 use std::path::PathBuf;
 use std::env;
 use blocksy2::{Db, DbConfig};
@@ -40,6 +41,9 @@ fn main() -> Result<()> {
                 let value = String::from_utf8(value).expect("value");
 
                 println!("{}", value);
+            }
+            "delete-db" => {
+                fs::remove_dir_all(&config.data_dir)?;
             }
             _ => {
                 panic!("unknown command");
