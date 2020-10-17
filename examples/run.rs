@@ -29,6 +29,17 @@ fn main() -> Result<()> {
                 drop(tree);
                 batch.commit().await?;
             }
+            "delete" => {
+                let key = args.get(2).expect("key");
+
+                let db = Db::open(config).await?;
+
+                let batch = db.write_batch();
+                let tree = batch.tree(treename);
+                tree.delete(key.as_bytes());
+                drop(tree);
+                batch.commit().await?;
+            }
             "read" => {
                 let key = args.get(2).expect("key");
 

@@ -118,7 +118,7 @@ impl<'view> ReadTree<'view> {
 
     pub fn cursor(&self) -> Cursor {
         let db = self.view.db.clone();
-        let view = self.view.view;
+        let view = db.clone_view(self.view.view);
         let tree = self.tree.clone();
         let cursor = self.view.db.cursor(view, &tree);
         let value = None;
