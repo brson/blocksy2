@@ -82,7 +82,7 @@ struct CommitLog {
 }
 
 #[derive(Clone)]
-struct ListNode(Arc<(Option<ListNode>, Option<ListNode>, Vec<u8>)>);
+struct ListNode(Arc<(Mutex<Option<ListNode>>, Mutex<Option<ListNode>>, Vec<u8>)>);
 
 pub struct Cursor {
     view: View,
@@ -631,7 +631,7 @@ impl LogIndex {
         };
 
         let mut first = None;
-        //let mut curr = None;
+        let mut curr = None;
         let map = self.committed.lock().expect("poison");
         for (key, entries) in map.iter() {
             let offset = self.latest_offset_in_view(entries, view_commit_limit);
@@ -640,10 +640,20 @@ impl LogIndex {
             }
 
             let key = key.to_vec();
-            //let curr = (curr.clone(), None)
+            let prev = curr.clone();
+            curr = Some(ListNode(Arc::new((Mutex::new(prev.clone()), Mutex::new(None), key))));
+
+            if let Some(prev) = prev {
+                let mut prev_next = prev.0.1.lock().expect("poison");
+                *prev_next = curr.clone();
+            }
+
+            if first.is_none() {
+                first = curr.clone();
+            }
         }
 
-        let last = None;
+        let last = curr;
 
         (first, last)
     }
