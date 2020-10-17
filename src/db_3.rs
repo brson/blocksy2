@@ -82,7 +82,8 @@ struct CommitLog {
     fs_thread: Arc<FsThread>,
 }
 
-struct ListNode(Box<Arc<(Option<ListNode>, Option<ListNode>)>>);
+#[derive(Clone)]
+struct ListNode(Box<(Arc<(Option<ListNode>, Option<ListNode>)>, Vec<u8>)>);
 
 pub struct Cursor {
     view: View,
@@ -257,10 +258,26 @@ impl Db {
         let old = map.remove(&view);
         assert!(old.is_some());
     }
+}
 
+impl Db {
     pub fn cursor(&self, view: View, tree: &str) -> Cursor {
         let view = self.clone_view(view);
-        panic!()
+        let log = self.logs.get(tree).expect("tree");
+        let (first, last) = log.cursor_list(view);
+        let curr = None;
+
+        Cursor {
+            view,
+            first,
+            last,
+            curr,
+        }
+    }
+
+    pub fn close_cursor(&self, cursor: Cursor) {
+        self.close_view(cursor.view);
+        drop(cursor);
     }
 }
 
@@ -344,6 +361,12 @@ impl Log {
         } else {
             Ok(None)
         }
+    }
+}
+
+impl Log {
+    fn cursor_list(&self, view: View) -> (Option<ListNode>, Option<ListNode>) {
+        self.index.cursor_list(view)
     }
 }
 
@@ -617,6 +640,20 @@ impl LogIndex {
     }
 }
 
+impl LogIndex {
+    fn cursor_list(&self, view: View) -> (Option<ListNode>, Option<ListNode>) {
+        let mut first = None;
+        //let mut curr = None;
+        let map = self.committed.lock().expect("poison");
+        for (key, valuees) in map.iter() {
+        }
+
+        let last = None;
+
+        (first, last)
+    }
+}
+
 impl CommitLog {
     async fn open(path: PathBuf, fs_thread: Arc<FsThread>) -> Result<(CommitLog, BatchCommitMap)> {
         let path = Arc::new(path);
@@ -697,7 +734,7 @@ impl Cursor {
         panic!()
     }
 
-    pub fn key_value(&self) -> (&[u8], &[u8]) {
+    pub fn key(&self) -> &[u8] {
         panic!()
     }
 
