@@ -82,7 +82,7 @@ struct CommitLog {
 }
 
 #[derive(Clone)]
-struct ListNode(Box<(Arc<(Option<ListNode>, Option<ListNode>)>, Vec<u8>)>);
+struct ListNode(Arc<(Option<ListNode>, Option<ListNode>, Vec<u8>)>);
 
 pub struct Cursor {
     view: View,
@@ -616,12 +616,7 @@ impl LogIndex {
         let entries = committed.get(key);
 
         if let Some(entries) = entries {
-            let entry = self.latest_entry_in_view(entries, view_commit_limit);
-            match entry {
-                Some(IndexEntry::Filled(offset)) => Some(offset),
-                Some(IndexEntry::Deleted(_)) => None,
-                None => None,
-            }
+            self.latest_offset_in_view(entries, view_commit_limit)
         } else {
             None
         }
@@ -639,9 +634,13 @@ impl LogIndex {
         //let mut curr = None;
         let map = self.committed.lock().expect("poison");
         for (key, entries) in map.iter() {
-            for (batch, _) in entries.iter().rev() {
-                let entry = self.latest_entry_in_view(entries, view_commit_limit);
+            let offset = self.latest_offset_in_view(entries, view_commit_limit);
+            if offset.is_none() {
+                continue;
             }
+
+            let key = key.to_vec();
+            //let curr = (curr.clone(), None)
         }
 
         let last = None;
@@ -651,9 +650,9 @@ impl LogIndex {
 }
 
 impl LogIndex {
-    fn latest_entry_in_view(&self,
-                            entries: &[(Batch, IndexEntry)],
-                            view_commit_limit: Commit) -> Option<IndexEntry> {
+    fn latest_offset_in_view(&self,
+                             entries: &[(Batch, IndexEntry)],
+                             view_commit_limit: Commit) -> Option<Offset> {
         for entry in entries.iter().rev() {
             let batch = entry.0;
             let batch_commit = {
@@ -662,7 +661,10 @@ impl LogIndex {
             };
             if let Some(batch_commit) = batch_commit {
                 if batch_commit < view_commit_limit {
-                    return Some(entry.1);
+                    return match entry.1 {
+                        IndexEntry::Filled(offset) => Some(offset),
+                        IndexEntry::Deleted(_) => None,
+                    };
                 }
             }
         }
