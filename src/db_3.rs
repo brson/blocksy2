@@ -85,7 +85,6 @@ struct CommitLog {
 struct ListNode(Arc<(Mutex<Option<ListNode>>, Mutex<Option<ListNode>>, Vec<u8>)>);
 
 pub struct Cursor {
-    view: View,
     first: Option<ListNode>,
     last: Option<ListNode>,
     curr: Option<ListNode>,
@@ -260,28 +259,7 @@ impl Db {
 }
 
 impl Db {
-    pub fn cursor(&self, view: View, tree: &str) -> Cursor {
-        let view = self.clone_view(view);
-        let log = self.logs.get(tree).expect("tree");
-        let (first, last) = log.cursor_list(view);
-        let curr = None;
-
-        Cursor {
-            view,
-            first,
-            last,
-            curr,
-        }
-    }
-
-    pub fn close_cursor(&self, cursor: Cursor) {
-        self.close_view(cursor.view);
-        drop(cursor);
-    }
-}
-
-impl Db {
-    fn clone_view(&self, view: View) -> View {
+    pub fn clone_view(&self, view: View) -> View {
         let new_view = self.next_view.fetch_add(1, Ordering::Relaxed);
         assert_ne!(new_view, u64::max_value());
         let new_view = View(new_view);
@@ -292,6 +270,18 @@ impl Db {
             map.insert(new_view, commit);
         }
         new_view
+    }
+
+    pub fn cursor(&self, view: View, tree: &str) -> Cursor {
+        let log = self.logs.get(tree).expect("tree");
+        let (first, last) = log.cursor_list(view);
+        let curr = None;
+
+        Cursor {
+            first,
+            last,
+            curr,
+        }
     }
 }
 

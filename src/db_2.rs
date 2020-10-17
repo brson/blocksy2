@@ -33,7 +33,10 @@ pub struct ReadTree<'view> {
 
 pub struct Cursor {
     db: Arc<imp::Db>,
+    view: imp::View,
+    tree: String,
     cursor: imp::Cursor,
+    value: Option<Vec<u8>>,
 }
 
 impl Db {
@@ -114,9 +117,18 @@ impl<'view> ReadTree<'view> {
     }
 
     pub fn cursor(&self) -> Cursor {
+        let db = self.view.db.clone();
+        let view = self.view.view;
+        let tree = self.tree.clone();
+        let cursor = self.view.db.cursor(view, &tree);
+        let value = None;
+
         Cursor {
-            db: self.view.db.clone(),
-            cursor: self.view.db.cursor(self.view.view, &self.tree),
+            db,
+            view,
+            tree,
+            cursor,
+            value,
         }
     }
 }
@@ -126,27 +138,43 @@ impl Cursor {
         self.cursor.valid()
     }
 
-    pub fn next(&mut self) -> Result<()> {
-        Ok(self.cursor.next())
+    pub async fn next(&mut self) -> Result<()> {
+        self.value = None;
+        self.cursor.next();
+        panic!()
     }
 
-    pub fn prev(&mut self) -> Result<()> {
-        Ok(self.cursor.prev())
+    pub async fn prev(&mut self) -> Result<()> {
+        self.value = None;
+        self.cursor.prev();
+        panic!()
     }
 
     pub fn key_value(&self) -> (&[u8], &[u8]) {
         panic!()
     }
 
-    pub fn seek_first(&mut self) -> Result<()> {
-        Ok(self.cursor.seek_first())
+    pub async fn seek_first(&mut self) -> Result<()> {
+        self.value = None;
+        self.cursor.seek_first();
+        panic!()
     }
 
-    pub fn seek_last(&mut self) -> Result<()> {
-        Ok(self.cursor.seek_last())
+    pub async fn seek_last(&mut self) -> Result<()> {
+        self.value = None;
+        self.cursor.seek_last();
+        panic!()
     }
 
-    pub fn seek_key(&mut self, key: &[u8]) -> Result<()> {
-        Ok(self.cursor.seek_key(key))
+    pub async fn seek_key(&mut self, key: &[u8]) -> Result<()> {
+        self.value = None;
+        self.cursor.seek_key(key);
+        panic!()
+    }
+}
+
+impl Drop for Cursor {
+    fn drop(&mut self) {
+        self.db.close_view(self.view);
     }
 }
