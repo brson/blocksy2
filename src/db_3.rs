@@ -779,3 +779,17 @@ impl Cursor {
         panic!()
     }
 }
+
+impl Drop for Cursor {
+    fn drop(&mut self) {
+        let mut node = self.curr.clone();
+
+        while let Some(mut node_) = node {
+            let mut prev = node_.0.0.lock().expect("poison");
+            *prev = None;
+            let mut next = node_.0.1.lock().expect("poison");
+            node = next.clone();
+            *next = None;
+        }
+    }
+}
