@@ -40,7 +40,7 @@ pub struct DbConfig {
 
 pub struct Db {
     config: DbConfig,
-    stores: BTreeMap<String, Store>,
+    logs: BTreeMap<String, Log>,
     next_batch: AtomicU64,
     next_commit: AtomicU64,
     next_view: AtomicU64,
@@ -49,10 +49,6 @@ pub struct Db {
     commit_log: CommitLog,
     batch_commit_map: BatchCommitMap,
     view_commit_limit_map: ViewCommitMap,
-}
-
-struct Store {
-    log: Log,
 }
 
 struct Log {
@@ -114,21 +110,22 @@ impl Db {
 
         let view_commit_limit_map = Arc::new(Mutex::new(BTreeMap::new()));
 
-        let mut stores = BTreeMap::new();
+        let mut logs = BTreeMap::new();
 
         let mut max_batch = None;
 
         for tree in &config.trees {
             let tree_path_stem = paths::tree_path_stem(&config.data_dir, tree)?;
-            let (store, store_max_batch) =
-                Store::open(tree_path_stem, fs_thread.clone(),
-                            batch_commit_map.clone(),
-                            &commit_batch_map,
-                            view_commit_limit_map.clone()).await?;
-            if let Some(store_max_batch) = store_max_batch {
-                max_batch = Some(u64::max(max_batch.unwrap_or(0), store_max_batch.0));
+            let log_path = paths::log_path(&tree_path_stem)?;
+            let (log, log_max_batch) =
+                Log::open(log_path, fs_thread.clone(),
+                          batch_commit_map.clone(),
+                          &commit_batch_map,
+                          view_commit_limit_map.clone()).await?;
+            if let Some(log_max_batch) = log_max_batch {
+                max_batch = Some(u64::max(max_batch.unwrap_or(0), log_max_batch.0));
             }
-            stores.insert(tree.clone(), store);
+            logs.insert(tree.clone(), log);
         }
 
         let next_batch = max_batch
@@ -151,7 +148,7 @@ impl Db {
 
         return Ok(Db {
             config,
-            stores,
+            logs,
             next_batch,
             next_commit,
             next_view,
@@ -172,22 +169,22 @@ impl Db {
     }
 
     pub fn write(&self, tree: &str, batch: Batch, key: &[u8], value: &[u8]) {
-        let store = self.stores.get(tree).expect("tree");
-        store.write(batch, key, value);
+        let log = self.logs.get(tree).expect("tree");
+        log.write(batch, key, value);
     }
 
     pub fn delete(&self, tree: &str, batch: Batch, key: &[u8]) {
-        let store = self.stores.get(tree).expect("tree");
-        store.delete(batch, key);
+        let log = self.logs.get(tree).expect("tree");
+        log.delete(batch, key);
     }
 
     pub async fn commit_batch(&self, batch: Batch) -> Result<()> {
         let mut last_result = Ok(());
-        for store in self.stores.values() {
+        for log in self.logs.values() {
             if last_result.is_ok() {
-                last_result = store.pre_commit_batch(batch).await;
+                last_result = log.pre_commit_batch(batch).await;
             } else {
-                store.abort_batch(batch);
+                log.abort_batch(batch);
             }
         }
 
@@ -203,8 +200,8 @@ impl Db {
             // This step promotes all log index caches for the batch
             // from uncommitted to committed. It must be done under lock
             // so that the index keeps batches in commit order.
-            for store in self.stores.values() {
-                store.commit_batch(batch);
+            for log in self.logs.values() {
+                log.commit_batch(batch);
             }
 
             // Write the final commit confirmation to disk at some point in the
@@ -229,8 +226,8 @@ impl Db {
     }
 
     pub fn abort_batch(&self, batch: Batch) {
-        for store in self.stores.values() {
-            store.abort_batch(batch);
+        for log in self.logs.values() {
+            log.abort_batch(batch);
         }
     }
 }
@@ -251,8 +248,8 @@ impl Db {
     }
 
     pub async fn read(&self, tree: &str, view: View, key: &[u8]) -> Result<Option<Vec<u8>>> {
-        let store = self.stores.get(tree).expect("tree");
-        Ok(store.read(view, key).await?)
+        let log = self.logs.get(tree).expect("tree");
+        Ok(log.read(view, key).await?)
     }
 
     pub fn close_view(&self, view: View) {
@@ -279,54 +276,6 @@ impl Db {
             map.insert(new_view, commit);
         }
         new_view
-    }
-}
-
-impl Store {
-    async fn open(tree_path_stem: PathBuf, fs_thread: Arc<FsThread>,
-                  batch_commit_map: BatchCommitMap,
-                  commit_batch_map: &BTreeMap<Commit, Batch>,
-                  view_commit_limit_map: ViewCommitMap) -> Result<(Store, Option<Batch>)> {
-
-        let path = paths::log_path(&tree_path_stem)?;
-        let (log, max_batch) = Log::open(path, fs_thread,
-                                         batch_commit_map,
-                                         commit_batch_map,
-                                         view_commit_limit_map).await?;
-
-        let store = Store { log };
-
-        Ok((store, max_batch))
-    }
-}
-
-impl Store {
-    fn write(&self, batch: Batch, key: &[u8], value: &[u8]) {
-        self.log.write(batch, key, value);
-    }
-
-    fn delete(&self, batch: Batch, key: &[u8]) {
-        self.log.delete(batch, key);
-    }
-
-    async fn pre_commit_batch(&self, batch: Batch) -> Result<()> {
-        self.log.pre_commit_batch(batch).await?;
-
-        Ok(())
-    }
-
-    fn commit_batch(&self, batch: Batch) {
-        self.log.commit_batch(batch);
-    }
-
-    fn abort_batch(&self, batch: Batch) {
-        self.log.abort_batch(batch);
-    }
-}
-
-impl Store {
-    async fn read(&self, view: View, key: &[u8]) -> Result<Option<Vec<u8>>> {
-        Ok(self.log.read(view, key).await?)
     }
 }
 
