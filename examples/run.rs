@@ -42,6 +42,23 @@ fn main() -> Result<()> {
 
                 println!("{}", value);
             }
+            "scan" => {
+                let db = Db::open(config).await?;
+
+                let view = db.read_view();
+                let tree = view.tree(treename);
+                let mut cursor = tree.cursor();
+
+                cursor.seek_first().await?;
+
+                while cursor.valid() {
+                    let (key, value) = cursor.key_value();
+                    let key = std::str::from_utf8(key).expect("key");
+                    let value = std::str::from_utf8(value).expect("value");
+                    println!("k: {}, v: {}", key, value);
+                    cursor.next().await?;
+                }
+            }
             "delete-db" => {
                 fs::remove_dir_all(&config.data_dir)?;
             }
