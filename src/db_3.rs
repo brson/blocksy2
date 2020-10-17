@@ -22,8 +22,6 @@ pub struct Batch(u64);
 pub struct View(u64);
 #[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd)]
 pub struct Commit(u64);
-#[derive(Copy, Clone)]
-pub struct CommitLimit(u64);
 
 #[derive(Copy, Clone)]
 struct Size(u64);
@@ -72,6 +70,7 @@ struct LogIndex {
     view_commit_limit_map: ViewCommitMap,
 }
 
+#[derive(Copy, Clone)]
 enum IndexEntry {
     Filled(Offset),
     Deleted(Offset),
@@ -617,23 +616,12 @@ impl LogIndex {
         let entries = committed.get(key);
 
         if let Some(entries) = entries {
-            for entry in entries.iter().rev() {
-                let batch = entry.0;
-                let batch_commit = {
-                    let batch_commit_map = self.batch_commit_map.lock().expect("poison");
-                    batch_commit_map.get(&batch).copied()
-                };
-                if let Some(batch_commit) = batch_commit {
-                    if batch_commit < view_commit_limit {
-                        return match entry.1 {
-                            IndexEntry::Filled(offset) => Some(offset),
-                            IndexEntry::Deleted(_) => None,
-                        }
-                    }
-                }
+            let entry = self.latest_entry_in_view(entries, view_commit_limit);
+            match entry {
+                Some(IndexEntry::Filled(offset)) => Some(offset),
+                Some(IndexEntry::Deleted(_)) => None,
+                None => None,
             }
-
-            None
         } else {
             None
         }
@@ -642,15 +630,44 @@ impl LogIndex {
 
 impl LogIndex {
     fn cursor_list(&self, view: View) -> (Option<ListNode>, Option<ListNode>) {
+        let view_commit_limit = {
+            let mut map = self.view_commit_limit_map.lock().expect("poison");
+            *map.get(&view).expect("view-commit")
+        };
+
         let mut first = None;
         //let mut curr = None;
         let map = self.committed.lock().expect("poison");
-        for (key, valuees) in map.iter() {
+        for (key, entries) in map.iter() {
+            for (batch, _) in entries.iter().rev() {
+                let entry = self.latest_entry_in_view(entries, view_commit_limit);
+            }
         }
 
         let last = None;
 
         (first, last)
+    }
+}
+
+impl LogIndex {
+    fn latest_entry_in_view(&self,
+                            entries: &[(Batch, IndexEntry)],
+                            view_commit_limit: Commit) -> Option<IndexEntry> {
+        for entry in entries.iter().rev() {
+            let batch = entry.0;
+            let batch_commit = {
+                let batch_commit_map = self.batch_commit_map.lock().expect("poison");
+                batch_commit_map.get(&batch).copied()
+            };
+            if let Some(batch_commit) = batch_commit {
+                if batch_commit < view_commit_limit {
+                    return Some(entry.1);
+                }
+            }
+        }
+
+        None
     }
 }
 
