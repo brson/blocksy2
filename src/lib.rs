@@ -45,10 +45,10 @@ impl<'view> ReadTree<'view> {
 
 impl Cursor {
     pub fn valid(&self) -> bool { self.0.valid() }
-    pub fn next(&self) -> Result<()> { self.0.next() }
-    pub fn prev(&self) -> Result<()> { self.0.prev() }
+    pub fn next(&mut self) -> Result<()> { self.0.next() }
+    pub fn prev(&mut self) -> Result<()> { self.0.prev() }
     pub fn key_value(&self) -> (&[u8], &[u8]) { self.0.key_value() }
-    pub fn seek_first(&self) -> Result<()> { self.0.seek_first() }
-    pub fn seek_last(&self) -> Result<()> { self.0.seek_last() }
-    pub fn seek_key(&self, key: &[u8]) -> Result<()> { self.0.seek_key(key) }
+    pub fn seek_first(&mut self) -> Result<()> { self.0.seek_first() }
+    pub fn seek_last(&mut self) -> Result<()> { self.0.seek_last() }
+    pub fn seek_key(&mut self, key: &[u8]) -> Result<()> { self.0.seek_key(key) }
 }

@@ -752,31 +752,41 @@ impl CommitLog {
 
 impl Cursor {
     pub fn valid(&self) -> bool {
-        panic!()
+        self.curr.is_some()
     }
 
-    pub fn next(&self) {
-        panic!()
+    pub fn next(&mut self) {
+        self.curr = self.curr.as_ref().map(|c| c.0.1.lock().expect("poisoin").clone()).unwrap_or(None);
     }
 
-    pub fn prev(&self) {
-        panic!()
+    pub fn prev(&mut self) {
+        self.curr = self.curr.as_ref().map(|c| c.0.0.lock().expect("poison").clone()).unwrap_or(None);
     }
 
     pub fn key(&self) -> &[u8] {
-        panic!()
+        &self.curr.as_ref().expect("invalid").0.2
     }
 
-    pub fn seek_first(&self) {
-        panic!()
+    pub fn seek_first(&mut self) {
+        self.curr = self.first.clone();
     }
 
-    pub fn seek_last(&self) {
-        panic!()
+    pub fn seek_last(&mut self) {
+        self.curr = self.last.clone();
     }
 
-    pub fn seek_key(&self, key: &[u8]) {
-        panic!()
+    pub fn seek_key(&mut self, key: &[u8]) {
+        let mut curr = self.first.clone();
+
+        while let Some(curr_) = curr.as_ref() {
+            let val = &curr_.0.2;
+            let next = curr_.0.1.lock().expect("poison").clone();
+            if &**val == key {
+                self.curr = curr;
+                return;
+            }
+            curr = next;
+        }
     }
 }
 

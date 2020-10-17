@@ -126,11 +126,11 @@ impl Cursor {
         self.cursor.valid()
     }
 
-    pub fn next(&self) -> Result<()> {
+    pub fn next(&mut self) -> Result<()> {
         Ok(self.cursor.next())
     }
 
-    pub fn prev(&self) -> Result<()> {
+    pub fn prev(&mut self) -> Result<()> {
         Ok(self.cursor.prev())
     }
 
@@ -138,15 +138,15 @@ impl Cursor {
         panic!()
     }
 
-    pub fn seek_first(&self) -> Result<()> {
+    pub fn seek_first(&mut self) -> Result<()> {
         Ok(self.cursor.seek_first())
     }
 
-    pub fn seek_last(&self) -> Result<()> {
+    pub fn seek_last(&mut self) -> Result<()> {
         Ok(self.cursor.seek_last())
     }
 
-    pub fn seek_key(&self, key: &[u8]) -> Result<()> {
+    pub fn seek_key(&mut self, key: &[u8]) -> Result<()> {
         Ok(self.cursor.seek_key(key))
     }
 }
