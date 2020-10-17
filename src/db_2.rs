@@ -127,11 +127,11 @@ impl Cursor {
     }
 
     pub fn next(&self) -> Result<()> {
-        self.cursor.next()
+        Ok(self.cursor.next())
     }
 
     pub fn prev(&self) -> Result<()> {
-        self.cursor.prev()
+        Ok(self.cursor.prev())
     }
 
     pub fn key_value(&self) -> (&[u8], &[u8]) {
@@ -139,14 +139,14 @@ impl Cursor {
     }
 
     pub fn seek_first(&self) -> Result<()> {
-        self.cursor.seek_first()
+        Ok(self.cursor.seek_first())
     }
 
     pub fn seek_last(&self) -> Result<()> {
-        self.cursor.seek_last()
+        Ok(self.cursor.seek_last())
     }
 
     pub fn seek_key(&self, key: &[u8]) -> Result<()> {
-        self.cursor.seek_key(key)
+        Ok(self.cursor.seek_key(key))
     }
 }

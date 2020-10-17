@@ -755,11 +755,11 @@ impl Cursor {
         panic!()
     }
 
-    pub fn next(&self) -> Result<()> {
+    pub fn next(&self) {
         panic!()
     }
 
-    pub fn prev(&self) -> Result<()> {
+    pub fn prev(&self) {
         panic!()
     }
 
@@ -767,15 +767,15 @@ impl Cursor {
         panic!()
     }
 
-    pub fn seek_first(&self) -> Result<()> {
+    pub fn seek_first(&self) {
         panic!()
     }
 
-    pub fn seek_last(&self) -> Result<()> {
+    pub fn seek_last(&self) {
         panic!()
     }
 
-    pub fn seek_key(&self, key: &[u8]) -> Result<()> {
+    pub fn seek_key(&self, key: &[u8]) {
         panic!()
     }
 }
