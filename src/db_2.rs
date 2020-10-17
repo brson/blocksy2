@@ -31,7 +31,7 @@ pub struct ReadTree<'view> {
     tree: String,
 }
 
-pub struct Cursor;
+pub struct Cursor(imp::Cursor);
 
 impl Db {
     pub async fn open(config: DbConfig) -> Result<Db> {
@@ -111,36 +111,36 @@ impl<'view> ReadTree<'view> {
     }
 
     pub fn cursor(&self) -> Cursor {
-        panic!()
+        Cursor(self.view.db.cursor(self.view.view, &self.tree))
     }
 }
 
 impl Cursor {
     pub fn valid(&self) -> bool {
-        panic!()
+        self.0.valid()
     }
 
     pub fn next(&self) -> Result<()> {
-        panic!()
+        self.0.next()
     }
 
     pub fn prev(&self) -> Result<()> {
-        panic!()
+        self.0.prev()
     }
 
     pub fn key_value(&self) -> (&[u8], &[u8]) {
-        panic!()
+        self.0.key_value()
     }
 
     pub fn seek_first(&self) -> Result<()> {
-        panic!()
+        self.0.seek_first()
     }
 
     pub fn seek_last(&self) -> Result<()> {
-        panic!()
+        self.0.seek_last()
     }
 
     pub fn seek_key(&self, key: &[u8]) -> Result<()> {
-        panic!()
+        self.0.seek_key(key)
     }
 }

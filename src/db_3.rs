@@ -86,6 +86,15 @@ struct CommitLog {
     fs_thread: Arc<FsThread>,
 }
 
+struct ListNode(Box<Arc<(Option<ListNode>, Option<ListNode>)>>);
+
+pub struct Cursor {
+    view: View,
+    first: Option<ListNode>,
+    last: Option<ListNode>,
+    curr: Option<ListNode>,
+}
+
 impl Db {
     pub async fn open(config: DbConfig) -> Result<Db> {
 
@@ -250,6 +259,26 @@ impl Db {
         let mut map = self.view_commit_limit_map.lock().expect("poison");
         let old = map.remove(&view);
         assert!(old.is_some());
+    }
+
+    pub fn cursor(&self, view: View, tree: &str) -> Cursor {
+        let view = self.clone_view(view);
+        panic!()
+    }
+}
+
+impl Db {
+    fn clone_view(&self, view: View) -> View {
+        let new_view = self.next_view.fetch_add(1, Ordering::Relaxed);
+        assert_ne!(new_view, u64::max_value());
+        let new_view = View(new_view);
+        {
+            let mut map = self.view_commit_limit_map.lock().expect("poison");
+            let commit = *map.get(&view).expect("view");
+            assert!(!map.contains_key(&new_view));
+            map.insert(new_view, commit);
+        }
+        new_view
     }
 }
 
@@ -703,5 +732,35 @@ impl CommitLog {
         }).await?;
 
         Ok(())
+    }
+}
+
+impl Cursor {
+    pub fn valid(&self) -> bool {
+        panic!()
+    }
+
+    pub fn next(&self) -> Result<()> {
+        panic!()
+    }
+
+    pub fn prev(&self) -> Result<()> {
+        panic!()
+    }
+
+    pub fn key_value(&self) -> (&[u8], &[u8]) {
+        panic!()
+    }
+
+    pub fn seek_first(&self) -> Result<()> {
+        panic!()
+    }
+
+    pub fn seek_last(&self) -> Result<()> {
+        panic!()
+    }
+
+    pub fn seek_key(&self, key: &[u8]) -> Result<()> {
+        panic!()
     }
 }
