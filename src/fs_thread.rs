@@ -10,6 +10,7 @@ use async_channel::{self, Sender, Receiver, TrySendError};
 use futures::executor::{LocalPool, block_on};
 use std::sync::mpsc;
 
+#[derive(Debug)]
 pub struct FsThread {
     handle: JoinHandle<()>,
     tx: Sender<Message>,

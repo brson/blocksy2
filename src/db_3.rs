@@ -8,6 +8,7 @@ use std::fs::{self, File};
 use std::path::{PathBuf, Path};
 use std::collections::BTreeMap;
 use anyhow::{Result, Error};
+use std::fmt;
 
 mod fs_thread;
 mod logcmd;
@@ -16,26 +17,28 @@ mod paths;
 use fs_thread::FsThread;
 use logcmd::{LogCommand, CommitLogCommand};
 
-#[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd)]
+#[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Debug)]
 pub struct Batch(u64);
-#[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd)]
+#[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Debug)]
 pub struct View(u64);
-#[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd)]
+#[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Debug)]
 pub struct Commit(u64);
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 struct Size(u64);
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 struct Offset(u64);
 
 type BatchCommitMap = Arc<Mutex<BTreeMap<Batch, Commit>>>;
 type ViewCommitMap = Arc<Mutex<BTreeMap<View, Commit>>>;
 
+#[derive(Debug)]
 pub struct DbConfig {
     pub data_dir: PathBuf,
     pub trees: Vec<String>,
 }
 
+#[derive(Debug)]
 pub struct Db {
     config: DbConfig,
     logs: BTreeMap<String, Log>,
@@ -49,6 +52,7 @@ pub struct Db {
     view_commit_limit_map: ViewCommitMap,
 }
 
+#[derive(Debug)]
 struct Log {
     file: LogFile,
     index: Arc<LogIndex>,
@@ -63,6 +67,7 @@ struct LogFile {
     errors: Arc<Mutex<BTreeMap<Batch, Vec<Error>>>>,
 }
 
+#[derive(Debug)]
 struct LogIndex {
     committed: Arc<Mutex<BTreeMap<Vec<u8>, Vec<(Batch, IndexEntry)>>>>,
     uncommitted: Arc<Mutex<BTreeMap<Batch, Vec<(Vec<u8>, IndexEntry)>>>>,
@@ -70,12 +75,13 @@ struct LogIndex {
     view_commit_limit_map: ViewCommitMap,
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 enum IndexEntry {
     Filled(Offset),
     Deleted(Offset),
 }
 
+#[derive(Debug)]
 struct CommitLog {
     path: Arc<PathBuf>,
     fs_thread: Arc<FsThread>,
@@ -534,6 +540,15 @@ impl LogFile {
         };
 
         Ok(entry)
+    }
+}
+
+impl fmt::Debug for LogFile {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("LogFile")
+         .field("path", &self.path)
+         .field("errors", &self.errors)
+         .finish()
     }
 }
 

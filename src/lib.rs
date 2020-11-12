@@ -1,13 +1,13 @@
 #![allow(unused)]
 
-use anyhow::Result;
+pub use anyhow::Result;
 
 #[path = "db_2.rs"]
 mod imp;
 
 pub type DbConfig = imp::DbConfig;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Db(imp::Db);
 
 pub struct WriteBatch(imp::WriteBatch);

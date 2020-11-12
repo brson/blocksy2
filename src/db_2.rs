@@ -7,7 +7,7 @@ mod imp;
 
 pub type DbConfig = imp::DbConfig;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Db(Arc<imp::Db>);
 
 pub struct WriteBatch {
