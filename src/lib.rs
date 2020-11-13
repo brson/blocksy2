@@ -52,4 +52,5 @@ impl Cursor {
     pub async fn seek_first(&mut self) -> Result<()> { Ok(self.0.seek_first().await?) }
     pub async fn seek_last(&mut self) -> Result<()> { Ok(self.0.seek_last().await?) }
     pub async fn seek_key(&mut self, key: &[u8]) -> Result<()> { Ok(self.0.seek_key(key).await?) }
+    pub async fn seek_key_rev(&mut self, key: &[u8]) -> Result<()> { Ok(self.0.seek_key_rev(key).await?) }
 }

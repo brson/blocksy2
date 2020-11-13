@@ -828,6 +828,22 @@ impl Cursor {
 
         self.curr = None;
     }
+
+    pub fn seek_key_rev(&mut self, key: &[u8]) {
+        let mut curr = self.last.clone();
+
+        while let Some(curr_) = curr {
+            let val = &curr_.0.2;
+            let prev = curr_.0.0.lock().expect("poison").clone();
+            if &**val <= key {
+                self.curr = Some(curr_);
+                return;
+            }
+            curr = prev;
+        }
+
+        self.curr = None;
+    }
 }
 
 impl Drop for Cursor {

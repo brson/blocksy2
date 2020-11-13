@@ -182,6 +182,13 @@ impl Cursor {
         self.load().await?;
         Ok(())
     }
+
+    pub async fn seek_key_rev(&mut self, key: &[u8]) -> Result<()> {
+        self.value = None;
+        self.cursor.seek_key_rev(key);
+        self.load().await?;
+        Ok(())
+    }
 }
 
 impl Cursor {
