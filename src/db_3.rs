@@ -816,15 +816,17 @@ impl Cursor {
     pub fn seek_key(&mut self, key: &[u8]) {
         let mut curr = self.first.clone();
 
-        while let Some(curr_) = curr.as_ref() {
+        while let Some(curr_) = curr {
             let val = &curr_.0.2;
             let next = curr_.0.1.lock().expect("poison").clone();
-            if &**val == key {
-                self.curr = curr;
+            if &**val >= key {
+                self.curr = Some(curr_);
                 return;
             }
             curr = next;
         }
+
+        self.curr = None;
     }
 }
 
