@@ -16,9 +16,11 @@ pub struct WriteBatch {
     destructed: bool,
 }
 
+#[derive(Clone, Debug)]
 pub struct ReadView {
     db: Arc<imp::Db>,
     view: imp::View,
+    count: Arc<()>,
 }
 
 pub struct WriteTree<'batch> {
@@ -56,6 +58,7 @@ impl Db {
         ReadView {
             db: self.0.clone(),
             view: self.0.new_view(),
+            count: Arc::new(()),
         }
     }
 
@@ -75,7 +78,9 @@ impl Drop for WriteBatch {
 
 impl Drop for ReadView {
     fn drop(&mut self) {
-        self.db.close_view(self.view);
+        if Arc::strong_count(&self.count) == 1 {
+            self.db.close_view(self.view);
+        }
     }
 }
 
