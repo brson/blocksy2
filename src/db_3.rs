@@ -761,10 +761,12 @@ impl Cursor {
     }
 
     pub fn next(&mut self) {
+        assert!(self.valid());
         self.curr = self.curr.as_ref().map(|c| c.0.1.lock().expect("poisoin").clone()).unwrap_or(None);
     }
 
     pub fn prev(&mut self) {
+        assert!(self.valid());
         self.curr = self.curr.as_ref().map(|c| c.0.0.lock().expect("poison").clone()).unwrap_or(None);
     }
 
