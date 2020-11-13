@@ -21,6 +21,7 @@ impl Db {
     pub async fn open(config: DbConfig) -> Result<Db> { imp::Db::open(config).await.map(Db) }
     pub fn write_batch(&self) -> WriteBatch { WriteBatch(self.0.write_batch()) }
     pub fn read_view(&self) -> ReadView { ReadView(self.0.read_view()) }
+    pub async fn sync(&self) -> Result<()> { self.0.sync().await }
 }
 
 impl WriteBatch {

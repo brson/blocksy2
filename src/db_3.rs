@@ -235,6 +235,14 @@ impl Db {
             log.abort_batch(batch);
         }
     }
+
+    pub async fn sync(&self) -> Result<()> {
+        for log in self.logs.values() {
+            log.sync().await?;
+        }
+        self.commit_log.sync().await?;
+        Ok(())
+    }
 }
 
 impl Db {
@@ -346,6 +354,11 @@ impl Log {
         self.index.abort_batch(batch);
         self.file.abort_batch(batch);
     }
+
+    pub async fn sync(&self) -> Result<()> {
+        self.file.sync().await
+    }
+
 }
 
 impl Log {
@@ -514,6 +527,15 @@ impl LogFile {
         };
 
         drop(errors);
+    }
+
+    pub async fn sync(&self) -> Result<()> {
+        let path = self.path.clone();
+        self.fs_thread.run(move |fs| -> Result<()> {
+            let mut log = fs.open_append(&path)?;
+            log.sync_all()?;
+            Ok(())
+        }).await
     }
 }
 
@@ -752,6 +774,15 @@ impl CommitLog {
         }).await?;
 
         Ok(())
+    }
+
+    pub async fn sync(&self) -> Result<()> {
+        let path = self.path.clone();
+        self.fs_thread.run(move |fs| -> Result<()> {
+            let mut log = fs.open_append(&path)?;
+            log.sync_all()?;
+            Ok(())
+        }).await
     }
 }
 

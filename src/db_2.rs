@@ -58,6 +58,10 @@ impl Db {
             view: self.0.new_view(),
         }
     }
+
+    pub async fn sync(&self) -> Result<()> {
+        self.0.sync().await
+    }
 }
 
 impl Drop for WriteBatch {
