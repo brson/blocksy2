@@ -32,7 +32,7 @@ struct Offset(u64);
 type BatchCommitMap = Arc<Mutex<BTreeMap<Batch, Commit>>>;
 type ViewCommitMap = Arc<Mutex<BTreeMap<View, Commit>>>;
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct DbConfig {
     pub data_dir: PathBuf,
     pub trees: Vec<String>,
